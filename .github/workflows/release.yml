@@ -47,7 +47,9 @@ jobs:
           uv version "$VERSION"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "Release v$VERSION"
+          if ! git diff --quiet; then  # nothing to commit when releasing the current version
+            git commit -am "Release v$VERSION"
+          fi
           git tag -a "v$VERSION" -m "control-mod v$VERSION"
           git push origin "HEAD:$GITHUB_REF_NAME" "v$VERSION"
       - name: Check tag matches version
