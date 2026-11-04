@@ -33,10 +33,29 @@ def run_script(blend, script, *args):
 
 @pytest.fixture(scope="module")
 def pkg(tmp_path_factory, game):
+    from ctlmod.usage import TextureUsage
+
     d = tmp_path_factory.mktemp("pkg") / "jesse_suit"
-    package.export_package(game.read(MODEL), MODEL, d, game.try_read, log=lambda s: None)
+    usage = TextureUsage.load(game, ROOT / ".ctlmod", progress=None)
+    package.export_package(game.read(MODEL), MODEL, d, game.try_read, log=lambda s: None,
+                           shared_with=lambda t: usage.others(t, MODEL))
     blender("import", d, d / "model.blend")
     return d
+
+
+def test_blend_flags_shared_textures(pkg):
+    script = (
+        "import bpy\n"
+        "labels = [n.label for m in bpy.data.materials if m.node_tree for n in m.node_tree.nodes if n.get('ctl_shared_with')]\n"
+        "print('SHARED_NODES', len(labels))\n"
+        "print('SHARED_IMAGES', sum(1 for i in bpy.data.images if i.name.startswith('SHARED(')))\n"
+        "print('README', 'ctlmod_READ_ME' in bpy.data.texts and 'SHARED TEXTURES' in bpy.data.texts['ctlmod_READ_ME'].as_string())\n"
+    )
+    cmd = [str(BLENDER), "--background", str(pkg / "model.blend"), "--python-expr", script]
+    out = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
+    counts = {ln.split()[0]: ln.split()[1] for ln in out.splitlines() if ln.startswith(("SHARED_", "README"))}
+    assert int(counts["SHARED_NODES"]) > 10 and int(counts["SHARED_IMAGES"]) > 10  # face, hands, defaults ...
+    assert counts["README"] == "True"
 
 
 def test_unedited_roundtrip_through_blender(pkg, game):
@@ -55,25 +74,49 @@ def test_unedited_roundtrip_through_blender(pkg, game):
         assert np.allclose(b.bone_weights.sum(1), 1, atol=1e-5)
 
 
-def test_edits_new_mesh_and_material(pkg, game, tmp_path):
-    blend = tmp_path / "edited.blend"
+def test_new_mesh_fits_the_size_budget(pkg, game, tmp_path):
+    blend = tmp_path / "halo.blend"
     blend.write_bytes((pkg / "model.blend").read_bytes())
-    run_script(blend, ROOT / "examples" / "demo_edit.py", "--halo", "--red-jacket")
-    # the script saved its texture next to the blend; point the package at it
+    run_script(blend, ROOT / "examples" / "demo_edit.py", "--halo", "jesse_suit_accessories")
     blender("export", pkg, blend=blend)
     res = package.build_from_blender(pkg, read_texture=game.try_read, log=lambda s: None)
     out = BinFbx.parse(res.binfbx)
+    assert len(res.binfbx) <= len(game.read(MODEL))  # what the game's metadata allows
+    assert any("LOD1 now uses LOD2" in r for r in res.report)  # made room by reusing a coarser LOD
+    # buffer sizes (recorded in the game's metadata) are exactly the original ones
+    orig_fbx = BinFbx.parse(game.read(MODEL))
+    assert (len(out.secondary), len(out.primary), len(out.indices), out.index_size) == (
+        len(orig_fbx.secondary), len(orig_fbx.primary), len(orig_fbx.indices), orig_fbx.index_size)
+    orig = BinFbx.parse(game.read(MODEL))
+    # same mesh slots as the original: the halo is merged into the accessories mesh
+    assert [(m.lod, mat) for m, mat in zip(out.meshes, out.mesh_material)] == [
+        (m.lod, mat) for m, mat in zip(orig.meshes, orig.mesh_material)]
+    assert any("merged into LOD0 mesh 'jesse_suit_accessories'" in r for r in res.report)
     names = [m.name.text for m in out.materials]
-    assert "jesse_suit_jacket_red" in names
-    assert any(p.endswith("jacket_red_d.tex") for p in res.textures)
-    assert len(out.meshes) == 32  # 31 original + halo
-    halo = [s for s in decode(out) if s.material == names.index("jesse_suit_accessories") and s.lod == 0]
-    assert any(s.positions[:, 1].min() > 1.8 for s in halo)  # a whole mesh above the head (game Y up)
+    acc = names.index("jesse_suit_accessories")
+    lod0_acc = next(s for s in decode(out) if s.lod == 0 and s.material == acc)
+    assert (lod0_acc.positions[:, 1] > 1.8).sum() > 100  # the halo's vertices, above the head
+
+
+def test_new_material_and_texture_are_refused(pkg, game, tmp_path):
+    blend = tmp_path / "red.blend"
+    blend.write_bytes((pkg / "model.blend").read_bytes())
+    run_script(blend, ROOT / "examples" / "demo_edit.py", "--red-jacket")
+    blender("export", pkg, blend=blend)
+    with pytest.raises(package.BuildError) as e:
+        package.build_from_blender(pkg, read_texture=game.try_read, log=lambda s: None)
+    assert "jesse_suit_jacket_red" in str(e.value) and "new image" in str(e.value)
+    res = package.build_from_blender(pkg, read_texture=game.try_read, log=lambda s: None, strict=False)
+    assert "jesse_suit_jacket_red" in [m.name.text for m in BinFbx.parse(res.binfbx).materials]
 
 
 def test_lod_copy_mode(pkg, game):
     blender("export", pkg, "--lods", "copy", blend=pkg / "model.blend")
-    res = package.build_from_blender(pkg, read_texture=game.try_read, log=lambda s: None)
+    # copies of LOD0 in every LOD cannot fit the original size (the baked LOD3 keeps its
+    # original geometry, LOD1-2 get LOD0's): strict builds refuse, experimental ones allow
+    with pytest.raises(package.BuildError, match="exceeds the original's .*vertex buffer"):
+        package.build_from_blender(pkg, read_texture=game.try_read, log=lambda s: None)
+    res = package.build_from_blender(pkg, read_texture=game.try_read, log=lambda s: None, strict=False)
     out = BinFbx.parse(res.binfbx)
     lod0 = sum(m.face_count for m in out.meshes if m.lod == 0)
     for lod in range(1, out.lod_count):

@@ -46,6 +46,8 @@ def test_character_models_roundtrip_bytes(game):
                 assert m.primary_offset + n * geometry.stream_stride(m.attrs, 0) <= len(f.primary)
                 assert m.secondary_offset + n * geometry.stream_stride(m.attrs, 1) <= len(f.secondary)
             assert len(f.mesh_material) == len(f.meshes)
+            # the layout rules ctlmod enforces on rebuilt models hold for the game's own
+            assert model.layout_problems(f) == [], model.layout_problems(f)
             if f.to_bytes() != data:
                 bad.append(h.entry.path)
         except Exception as e:  # pragma: no cover - reported below

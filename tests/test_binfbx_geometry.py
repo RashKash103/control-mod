@@ -104,7 +104,17 @@ def test_rebuild_with_edits(fbx):
     out = model.rebuild(fbx, subs)
     again = BinFbx.parse(out.to_bytes())
     assert len(again.meshes) == len(subs)
-    assert again.mesh_material == [s.material for s in sorted(subs, key=lambda s: s.lod)]
+    # original meshes keep their relative order and come first; the new mesh is appended
+    # meshes stay grouped by LOD (the renderer requires it); within LOD0 the original
+    # meshes keep their order and the new one follows them
+    assert model.layout_problems(again) == []
+    lods = [m.lod for m in again.meshes]
+    assert lods == sorted(lods)
+    originals = sorted((s for s in subs if s.source_index >= 0), key=lambda s: s.source_index)
+    n0 = sum(1 for s in originals if s.lod == 0)
+    expected = [s.material for s in originals if s.lod == 0] + [1] + [s.material for s in originals if s.lod > 0]
+    assert again.mesh_material == expected
+    assert again.meshes[n0].lod == 0
     assert all(len(t) == len(again.meshes) for _, t in again.variants)
     # every mesh is covered by exactly one shadow range of its LOD
     groups = model.shadow_groups(again)

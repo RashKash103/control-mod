@@ -71,12 +71,28 @@ def make_plan(cfg: Config, gd: GameData, state: State) -> Plan:
     return plan
 
 
+def shared_impact(cfg: Config, state: State) -> dict[str, set[str]]:
+    """Enabled mod -> other models its shared-texture edits also change (from manifests)."""
+    out: dict[str, set[str]] = {}
+    for mod_id in state.order:
+        if not state.enabled.get(mod_id, True):
+            continue
+        man = Mod.load(cfg, mod_id).manifest() or {}
+        affected = {o for f in man.get("files", []) for o in f.get("also_affects") or []}
+        if affected:
+            out[mod_id] = affected
+    return out
+
+
 def install(cfg: Config, gd: GameData, state: State, dry_run: bool = False, log=print) -> Plan:
     plan = make_plan(cfg, gd, state)
     for path, loser, winner in plan.conflicts:
         log(f"conflict: {path} is changed by '{loser}' and '{winner}' - using '{winner}' (later in load order)")
     for m in plan.skipped:
         log(f"skipping '{m}': not built yet (run: ctlmod build {m})")
+    for mod_id, affected in shared_impact(cfg, state).items():
+        log(f"note: '{mod_id}' edits shared textures - this also changes {len(affected)} other model(s) "
+            f"(details: ctlmod impact {mod_id})")
     if dry_run:
         for stem, keys in plan.archives.items():
             log(f"would write {stem} ({len(keys)} files, overrides {plan.base_of[stem]})")
@@ -89,7 +105,7 @@ def install(cfg: Config, gd: GameData, state: State, dry_run: bool = False, log=
         base_arc = next((a for a in gd.archives if a.bin_path.stem == plan.base_of[stem]), None)
         files = [(plan.files[k][0], plan.files[k][1]) for k in sorted(keys)]
         out = gd.pack_dir / stem
-        write_archive(out, files, template=base_arc, prefix=CTLMOD_MARKER)
+        write_archive(out, files, template=base_arc, marker=CTLMOD_MARKER)
         written.append(stem)
         log(f"wrote {stem}.bin/.rmdp ({len(files)} files, overrides {plan.base_of[stem]})")
     state.installed = {

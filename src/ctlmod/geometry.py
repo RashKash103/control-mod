@@ -343,12 +343,15 @@ class EncodedBuffers:
     meshes: list[Mesh]
 
 
-def encode(subs: list[Submesh], template_meshes: list[Mesh] | None = None, bone_total: int = 0) -> EncodedBuffers:
+def encode(
+    subs: list[Submesh], template_meshes: list[Mesh] | None = None, bone_total: int = 0, index_size: int | None = None
+) -> EncodedBuffers:
     """Pack submeshes into new vertex/index buffers.
 
     Submeshes are grouped by LOD (in order of first appearance); every LOD gets one
     shared vertex block, as in the original files. All submeshes of a LOD must use the
     same attribute layout (the first one's layout wins; others are converted).
+    ``index_size`` forces 16- or 32-bit indices (default: the smallest that fits).
     """
     template_meshes = template_meshes or []
     lods: dict[int, list[Submesh]] = {}
@@ -358,10 +361,11 @@ def encode(subs: list[Submesh], template_meshes: list[Mesh] | None = None, bone_
     prim_parts, sec_parts, idx_parts = [], [], []
     prim_off = sec_off = idx_off = 0
     meshes: list[Mesh] = []
-    big = any(len(v) > 65535 for v in lods.values()) or max(
-        (sum(s.vertex_count for s in v) for v in lods.values()), default=0
-    ) > 65535
-    index_size = 4 if big else 2
+    big = max((sum(s.vertex_count for s in v) for v in lods.values()), default=0) > 65535
+    if index_size is None:
+        index_size = 4 if big else 2
+    elif index_size == 2 and big:
+        raise ValueError("a LOD has more than 65,535 vertices but the model uses 16-bit indices")
 
     for lod in sorted(lods):
         group = lods[lod]

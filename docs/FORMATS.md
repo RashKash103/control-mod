@@ -10,8 +10,8 @@ and `tests/test_game_data.py` checks decoded geometry against itself.
 
 `data_packfiles/<ep>-<NNN>-<platform>[-<lang>].{bin,rmdp,packmeta}`, e.g.
 `ep100-000-generic` (models, generic data), `ep100-000-pc` (textures), `ep101-…`
-(expansion content). The engine enumerates `*.rmdp`; a higher `NNN` overrides lower
-ones. `.packmeta` is optional for added archives.
+(expansion content). The engine enumerates `*.rmdp`; a higher `NNN` is meant to
+override lower ones. Whether added archives also need a `.packmeta` is not known yet.
 
 `.bin` (table of contents):
 
@@ -21,22 +21,80 @@ ones. `.packmeta` is optional for added archives.
 | 1 | u32 | version (9) |
 | 5 | u32 | folder count |
 | 9 | u32 | file count |
-| 13 | u64 | *unknown* (1) |
+| 13 | u32 | deletion folder count (1 in every game archive) |
+| 17 | u32 | deletion file count (0) |
 | 21 | u32 | name table size |
-| 25 | char[8] | prefix (zero in game files; ctlmod writes `ctlmod\0\0` as its marker) |
-| 33 | u8[120] | reserved (uninitialised memory in game files) |
-| 153 | Folder[n] | 48 bytes each |
-| … | File[n] | 60 bytes each |
-| end − size | char[] | NUL-terminated names |
+| 25 | u8[128] | tag area: 13 zero bytes, then `x%016x` + NUL at byte 38 = build time as a Windows FILETIME; the rest is uninitialised memory (ctlmod puts its `ctlmod` marker at byte 121) |
+| 153 | Folder[n] | 48 bytes each, pre-order, siblings sorted by name |
+| … | File[n] | 60 bytes each, grouped by folder, sorted by name |
+| … | Folder[deletions] | a second tree of deleted paths; game archives have only an empty root |
+| … | File[deletions] | |
+| end − size | char[] | NUL-terminated names (not de-duplicated) |
 
 Folder: `u32 name_hash, i64 next_sibling, i64 parent, u32 0xCACACACA, i64 name_offset,
-i64 first_child, i64 first_file`. Folder 0 is the unnamed root.
+i64 first_child, i64 first_file`. Folder 0 is the unnamed root (hash 0, name −1).
 
 File: `u32 name_hash, i64 next_file, i64 parent_folder, u32 flags, i64 name_offset,
-u64 data_offset, u64 data_size, u32 data_crc32, u64 write_time`.
+u64 data_offset, u64 data_size, u32 data_crc32, u64 write_time (FILETIME)`.
 
 `name_hash` = zlib CRC-32 of the lower-cased name; `data_crc32` = CRC-32 of the
-payload. `.rmdp` holds the raw payloads (no compression).
+payload. `.rmdp` holds the raw payloads, each starting on a 32-byte boundary, zero
+padded so the file length is a multiple of 32 (no compression).
+
+The engine loads these records directly into memory and converts indices to pointers
+(path lookup in `rl_rmdwin10_f.dll`), so the counts and the deletion tree must be
+exact: an archive without the deletion root crashes the game at startup (this was
+ctlmod 0.1's bug). `tests/test_archive.py` rebuilds small game archives from their
+contents and requires byte-identical output.
+
+## Metadata: `.packmeta` (partly decoded, not written by ctlmod)
+
+Each archive's `.packmeta` holds per-file metadata the engine trusts over the files:
+
+```
+u32 count, u32 1, u32 count, u32 strings_size
+char[strings_size]       NUL-terminated backslash paths
+u32[count]               string offsets (path order)
+u32 n (= count)
+u64[n]                   64-bit path hashes, sorted ascending (binary-search index)
+u32[n]                   string offset of each hash's path
+u32 type_count (33), Type[]: u32 hash, u32 len, char[len] name, u32 0
+                         e.g. r::FileInfoMetadata 0x95e8c0ef, rend::TextureMetadata
+                         0x968a49b7, rend::MeshMetadata, ... (identical in every pack)
+objects                  grouped by type; each: u32 0xd34db33f, u32 version(2),
+                         u32 size, u32 type hash, payload
+```
+
+* `r::FileInfoMetadata` payload: `u32 1, u64 file size, u32 data CRC-32`.
+* `rend::MeshMetadata` (type `0xfe276448`) contains a nested object with the model's
+  **secondary vertex buffer size, primary vertex buffer size, index count and index
+  size** (the first fields of the `.binfbx` header), a bounding-box object (6 floats)
+  and shader-template information. The renderer allocates GPU buffers and ray-tracing
+  data from these.
+* `rend::TextureMetadata` contains format, width, height, mip count and per-mip
+  streaming offsets (nested objects).
+* A pack whose files need no metadata (e.g. the language string tables) has
+  `count = 0` and only the type registry.
+* The 64-bit path hash is **not** the engine's `StringHash64` (FNV-1a over
+  `c | 0x20`), CityHash64, FarmHash64, xxHash or CRC-64 of the stored path; it is
+  presumably produced by `ResourceID::createResourceID` (`rl_rmdwin10_f.dll` 0x11d970).
+  How objects are linked to files is not decoded yet.
+
+Behaviour confirmed in game (patch archives without a `.packmeta`):
+
+* Metadata is looked up per file across all archives, so a replaced file is described
+  by the **original** archive's metadata.
+* A replaced texture with the same format, resolution and size works (a different CRC
+  is fine).
+* A replaced model with the **same size** loads and its geometry is used; a **larger**
+  model makes the game abort while loading (`NullMemoryResource` in
+  `rl_rmdwin10_f.dll` at 0x1c08e0, the engine's deliberate out-of-pool crash).
+* Texture paths in a model's materials are **ignored**: texture bindings come from
+  metadata. Changing a material's texture, even with a new material id, has no effect.
+* With ray tracing enabled, a model whose buffer sizes or per-LOD mesh list differ from
+  the original crashes in `Mesh::finalize`-built tables (`renderer_rmdwin10_f.dll`
+  0xa866b). ctlmod therefore keeps the original mesh slots and pads the buffers to the
+  original sizes (and caps the surface-area table at the original triangle count).
 
 ## Textures: `.tex`
 

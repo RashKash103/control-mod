@@ -167,7 +167,7 @@ def cmd_build(cfg: Config, a) -> None:
         for m in mod.models.values():
             m.lods = a.lods
         mod.save()
-    mod.build(cfg, gd)
+    mod.build(cfg, gd, experimental=a.experimental)
     if a.install:
         cmd_install(cfg, argparse.Namespace(dry_run=False))
 
@@ -247,6 +247,79 @@ def cmd_install(cfg: Config, a) -> None:
 
     gd = _gd(cfg)
     installer.install(cfg, gd, _state(cfg), dry_run=a.dry_run)
+
+
+def cmd_impact(cfg: Config, a) -> None:
+    """What a mod changes beyond its own models: shared textures, edited or not yet built."""
+    import hashlib
+    import json
+
+    from .project import Mod
+    from .usage import describe
+
+    mod = Mod.load(cfg, a.mod)
+    man = mod.manifest()
+    own = {m.source.lower() for m in mod.models.values()}
+    print(f"mod '{mod.id}': models {', '.join(mod.models) or '(none)'}")
+    if man:
+        print("\nbuilt files:")
+        others_total: set[str] = set()
+        for f in man["files"]:
+            aff = f.get("also_affects") or []
+            others_total.update(aff)
+            tag = f"  ALSO CHANGES {len(aff)} other model(s): {describe(aff, 8 if a.all else 4)}" if aff else ""
+            print(f"  {f['path']}{tag}")
+            if a.all and aff:
+                for o in aff:
+                    print(f"      - {o}")
+        if others_total:
+            print(f"\n=> installing this mod changes {len(others_total)} model(s) outside the mod via shared textures.")
+        else:
+            print("\n=> this mod only changes its own models.")
+    else:
+        print("(not built yet - showing edited textures from the model folders)")
+    # textures edited in the workspace but maybe not built yet
+    for name in mod.models:
+        meta_p = mod.model_dir(name) / "model.json"
+        if not meta_p.exists():
+            continue
+        meta = json.loads(meta_p.read_text())
+        edited = []
+        for apath, rec in meta["textures"].items():
+            png = mod.model_dir(name) / (rec.get("png") or "")
+            if rec.get("png") and png.exists() and hashlib.sha256(png.read_bytes()).hexdigest() != rec.get("sha256"):
+                edited.append((apath, [o for o in rec.get("shared_with") or [] if o.lower() not in own]))
+        if edited:
+            print(f"\n[{name}] textures edited in the workspace:")
+            for apath, others in edited:
+                note = f"shared with {len(others)}: {describe(others)}" if others else "used only by this model"
+                print(f"  {Path(apath).name:<45} {note}")
+
+
+def cmd_usage(cfg: Config, a) -> None:
+    """Which models use a texture (pattern) - or which textures of a model are shared."""
+    from .usage import TextureUsage, describe
+
+    gd = _gd(cfg)
+    usage = TextureUsage.load(gd, cfg.state_dir)
+    if a.model:
+        from .binfbx import BinFbx
+        from .package import game_texture_to_archive_path
+
+        path = _pick_model(gd, a.pattern)
+        f = BinFbx.parse(gd.read(path))
+        texs = sorted({game_texture_to_archive_path(t) for m in f.materials for t in m.textures().values()})
+        print(f"{path}: {len(texs)} textures")
+        for t in texs:
+            others = usage.others(t, path)
+            print(f"  {Path(t).name:<50} {'shared with ' + str(len(others)) + ': ' + describe(others, 3) if others else 'only this model'}")
+        return
+    hits = usage.search(a.pattern)
+    for t, models in list(hits.items())[: a.limit]:
+        print(f"{t}  ({len(models)} model(s))")
+        for m in models[: a.limit]:
+            print(f"    {m}")
+    print(f"{len(hits)} matching texture(s)")
 
 
 def cmd_uninstall(cfg: Config, a) -> None:
@@ -406,6 +479,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("mod")
     s.add_argument("--lods", choices=["authored", "copy", "decimate"], help="override LOD mode for all models")
     s.add_argument("--install", action="store_true", help="install enabled mods afterwards")
+    s.add_argument("--experimental", action="store_true",
+                   help="allow edits the game is not known to load (new materials/textures, larger models)")
     s.set_defaults(func=cmd_build)
 
     s = sub.add_parser("render", help="render a preview image of a mod's model")
@@ -432,6 +507,15 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("install", help="install all enabled, built mods into the game")
     s.add_argument("--dry-run", action="store_true")
     s.set_defaults(func=cmd_install)
+    s = sub.add_parser("impact", help="show what a mod changes outside its own models (shared textures)")
+    s.add_argument("mod")
+    s.add_argument("--all", action="store_true", help="list every affected model")
+    s.set_defaults(func=cmd_impact)
+    s = sub.add_parser("usage", help="which models use a texture, or (--model) which textures of a model are shared")
+    s.add_argument("pattern", help="texture name/glob, or a model name with --model")
+    s.add_argument("--model", action="store_true")
+    s.add_argument("--limit", type=int, default=50)
+    s.set_defaults(func=cmd_usage)
     s = sub.add_parser("uninstall", help="remove everything ctlmod installed")
     s.set_defaults(func=cmd_uninstall)
     s = sub.add_parser("status", help="show what is installed and pending")
@@ -467,7 +551,7 @@ def main(argv: list[str] | None = None) -> None:
         args.func(cfg, args)
     except KeyboardInterrupt:
         sys.exit(130)
-    except RuntimeError as e:
+    except (RuntimeError, ValueError) as e:  # BuildError is a ValueError with a full explanation
         sys.exit(f"error: {e}")
 
 

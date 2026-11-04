@@ -1,0 +1,12 @@
+# ctlmod mod definition
+id = "demo_civilian"
+name = "Demo: Bureau Casual test (red tank top, red jacket, halo)"
+author = "Rony Kashem"
+version = "1.0.0"
+description = ""
+
+[models]
+
+[models.jesse_civilian_publish_physx]
+source = "data/objects/characters/intermediate/jesse_civilian_publish_physx.binfbx"
+lods = "authored"

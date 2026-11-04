@@ -138,18 +138,42 @@ class Mod:
         d = self.model_dir(name)
         if d.exists():
             shutil.rmtree(d)
+        from .usage import TextureUsage, describe
+
+        usage = TextureUsage.load(gd, cfg.state_dir, progress=log)
         log(f"exporting {loc.entry.path} from {loc.archive_name} ...")
-        meta = package.export_package(gd.read(loc.entry.path), loc.entry.path, d, gd.try_read, log=log)
+        meta = package.export_package(
+            gd.read(loc.entry.path), loc.entry.path, d, gd.try_read, log=log,
+            shared_with=lambda t: usage.others(t, loc.entry.path),
+        )
         log(f"  {len(meta['meshes'])} meshes, {len(meta['materials'])} materials, {len(meta['textures'])} textures, {len(meta['bones'])} bones")
+        shared = {t: r["shared_with"] for t, r in meta["textures"].items() if r.get("shared_with") and r.get("png")}
+        if shared:
+            log(f"  NOTE: {len(shared)} of its textures are shared with other models; editing them changes those too:")
+            for t, others in sorted(shared.items(), key=lambda kv: -len(kv[1]))[:12]:
+                log(f"    {Path(t).stem:<45} also used by {len(others):>4}: {describe(others, 3)}")
+            if len(shared) > 12:
+                log(f"    ... and {len(shared) - 12} more (they are marked SHARED in Blender; see 'ctlmod impact')")
         log("creating Blender file ...")
         run_blender(cfg, ["import", str(d), str(self.blend_path(name))], log=log)
         self.models[name] = ModelEntry(name, loc.entry.path, lods)
         self.save()
         return name
 
-    def build(self, cfg: Config, gd: GameData, log=print) -> dict:
+    def build(self, cfg: Config, gd: GameData, log=print, experimental: bool = False) -> dict:
+        """Build all models into ``build/files`` and write ``build/manifest.json``.
+
+        By default only edits the game is known to load are allowed (see
+        ``package.build_from_blender``), and every replaced file is padded to exactly the
+        original's size, because the game sizes load buffers from the original
+        archive's metadata. ``experimental`` lifts both restrictions.
+        """
+        from .usage import TextureUsage, describe
+
         if not self.models:
             raise SystemExit(f"mod '{self.id}' has no models. Add one with: ctlmod add {self.id} <model>")
+        usage = TextureUsage.load(gd, cfg.state_dir, progress=log)
+        own_models = {m.source for m in self.models.values()}
         files_dir = self.build_dir / "files"
         if files_dir.exists():
             shutil.rmtree(files_dir)
@@ -163,24 +187,45 @@ class Mod:
                 raise SystemExit(f"{blend} is missing")
             log(f"[{name}] reading Blender file (LODs: {m.lods}) ...")
             run_blender(cfg, ["export", str(d), "--lods", m.lods], blend=blend, log=log)
-            res = package.build_from_blender(d, read_texture=gd.try_read, new_texture_root=f"data_pc/textures/ctlmod/{self.id}", log=log)
-            for line in res.report:
-                log(f"  {line}")
-            reports[name] = res.report
+            res = package.build_from_blender(
+                d, read_texture=gd.try_read, new_texture_root=f"data_pc/textures/ctlmod/{self.id}", log=log, strict=not experimental
+            )
             outputs = {m.source: res.binfbx, **res.textures}
             for apath, data in outputs.items():
+                orig_size = None
+                affects: list[str] = []
                 if apath in gd:
-                    base = gd.locate(apath).archive_name
+                    loc = gd.locate(apath)
+                    base = loc.archive_name
                     new = False
+                    orig_size = loc.entry.size
+                    if not experimental:
+                        if len(data) > orig_size:  # fit_to_size / resolution checks should prevent this
+                            raise package.BuildError(f"{apath} is larger than the original ({len(data):,} > {orig_size:,} bytes)")
+                        data = data + bytes(orig_size - len(data))
+                    if apath.lower().endswith(".tex"):
+                        affects = usage.others(apath, own_models)
+                        if affects:
+                            res.report.append(
+                                f"WARNING: {Path(apath).name} is shared - this also changes {len(affects)} other "
+                                f"model(s): {describe(affects)}"
+                            )
                 else:
-                    # new file: put it next to what it was derived from
+                    # new file (experimental): put it next to what it was derived from
                     base = _guess_archive(gd, apath, m.source)
                     new = True
                 dest = files_dir / apath
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_bytes(data)
-                entries.append({"path": apath, "archive": base, "new": new, "model": name, "size": len(data)})
-        manifest = {"id": self.id, "name": self.name, "version": self.version, "files": entries, "reports": reports}
+                entries.append({
+                    "path": apath, "archive": base, "new": new, "model": name, "size": len(data),
+                    "original_size": orig_size, "also_affects": affects,
+                })
+            for line in res.report:
+                log(f"  {line}")
+            reports[name] = res.report
+        manifest = {"id": self.id, "name": self.name, "version": self.version, "experimental": experimental,
+                    "files": entries, "reports": reports}
         self.manifest_path.write_text(json.dumps(manifest, indent=1))
         log(f"built {len(entries)} files into {files_dir}")
         return manifest

@@ -271,8 +271,13 @@ def export_package(
     out_dir: str | Path,
     read_texture: TextureReader | None = None,
     log: Callable[[str], None] = print,
+    shared_with: Callable[[str], list[str]] | None = None,
 ) -> dict:
-    """Write a model package for one ``.binfbx``. Returns the model.json content."""
+    """Write a model package for one ``.binfbx``. Returns the model.json content.
+
+    ``shared_with(texture archive path)`` lists *other* models using a texture; it is
+    stored per texture so the Blender file can flag shared textures.
+    """
     out = Path(out_dir)
     (out / "textures").mkdir(parents=True, exist_ok=True)
     (out / "template.binfbx").write_bytes(fbx_bytes)
@@ -291,6 +296,8 @@ def export_package(
             apath = game_texture_to_archive_path(p.value.text)
             if apath not in textures:
                 rec = {"archive_path": apath, "png": None}
+                if shared_with is not None:
+                    rec["shared_with"] = shared_with(apath)
                 data = read_texture(apath) if read_texture else None
                 if data is not None:
                     try:
@@ -356,6 +363,18 @@ def export_package(
 # ------------------------------------------------------------------------- build
 
 
+class BuildError(ValueError):
+    """An edit the game cannot load; the message explains what to do instead."""
+
+
+# Why some edits are refused (confirmed in game, see README "What the game accepts"):
+WHY_TEXTURE_BINDING = (
+    "the game binds textures from its own metadata (.packmeta), not from the model file, "
+    "so changing which texture a material uses has no effect in game"
+)
+WHY_NEW_FILES = "the game has no metadata for brand-new files, so it cannot load them"
+
+
 @dataclass
 class BuildResult:
     binfbx: bytes
@@ -376,8 +395,16 @@ def build_from_blender(
     read_texture: TextureReader | None = None,
     new_texture_root: str = "data_pc/textures/ctlmod",
     log: Callable[[str], None] = print,
+    strict: bool = True,
 ) -> BuildResult:
-    """Rebuild the ``.binfbx`` (and any edited/new textures) from a Blender dump."""
+    """Rebuild the ``.binfbx`` (and any edited/new textures) from a Blender dump.
+
+    ``strict`` (the default) only allows edits the game is known to load: geometry and
+    weights within the original file size (lower LODs are simplified to make room),
+    existing materials, and textures repainted in place at their original resolution.
+    Anything else raises :class:`BuildError` listing every problem. ``strict=False``
+    allows new materials/textures and larger models for experiments.
+    """
     pkg = Path(pkg_dir)
     dump = Path(dump_dir) if dump_dir else pkg / "blender_export"
     meta = json.loads((pkg / "model.json").read_text())
@@ -385,6 +412,7 @@ def build_from_blender(
     scene, arrays = _load_blender_dump(dump)
     result = BuildResult(b"")
     report = result.report
+    problems: list[str] = []
 
     # ---------------------------------------------------------------- materials
     by_name = {m.name.text: i for i, m in enumerate(template.materials)}
@@ -407,6 +435,17 @@ def build_from_blender(
                 orig = read_texture(apath) if read_texture else None
                 if orig is None:
                     raise FileNotFoundError(f"original texture {apath} not available for re-encoding")
+                from PIL import Image
+
+                with Image.open(p) as im:
+                    size = im.size
+                want = (rec.get("width"), rec.get("height"))
+                if strict and want[0] and size != want:
+                    problems.append(
+                        f"{p.name} is {size[0]}x{size[1]} but must stay {want[0]}x{want[1]}: the game's metadata "
+                        "describes the original resolution. Scale your artwork to the original size."
+                    )
+                    return apath
                 result.textures[apath] = texture.from_image(p, orig)
                 report.append(f"texture modified: {apath}")
             return apath
@@ -414,6 +453,12 @@ def build_from_blender(
             report.append(f"warning: image {p} not found, keeping original texture")
             return None
         # a brand new image: encode it like the texture it replaces
+        if strict:
+            problems.append(
+                f"new image {p.name} is used in a material: {WHY_NEW_FILES}. Instead paint over the "
+                f"original texture (its PNG in textures/), keeping its resolution."
+            )
+            return like_apath
         like = read_texture(like_apath) if (read_texture and like_apath) else None
         if like is None:
             raise ValueError(f"new image {p.name} has no texture slot to take its format from")
@@ -448,6 +493,21 @@ def build_from_blender(
             if apath and apath != orig_apath:
                 changed[param] = apath
         renamed = not original
+        if strict and changed:
+            for param, apath in changed.items():
+                problems.append(
+                    f"material '{bm['name']}': {param} was switched to {Path(apath).name}, but "
+                    f"{WHY_TEXTURE_BINDING}. To change the look, edit the original texture "
+                    f"({Path(meta_mat['textures'].get(param, '?')).stem}.png) in place."
+                )
+            changed = {}
+        if strict and renamed:
+            problems.append(
+                f"material '{bm['name']}' is a new copy of '{base}': new materials are not supported "
+                f"({WHY_TEXTURE_BINDING}). Assign an existing material to those faces instead."
+            )
+            mat_index[bm["name"]] = idx
+            continue
         if not changed and not renamed:
             mat_index[bm["name"]] = idx
             continue
@@ -533,10 +593,64 @@ def build_from_blender(
         )
     if not subs:
         raise ValueError("no meshes to build")
-    out = model.rebuild(template, subs, out_materials)
+    # Meshes that come back from Blender unedited reuse the original vertex data exactly,
+    # so only edited meshes can change size (Blender splits a few extra vertices).
+    originals = decode(template)
+    kept = 0
+    for k, s in enumerate(subs):
+        if 0 <= s.source_index < len(originals):
+            o = originals[s.source_index]
+            if o.lod == s.lod and same_geometry(o, s):
+                passthrough = copy.copy(o)
+                passthrough.material = s.material
+                passthrough.layout = s.layout
+                subs[k] = passthrough
+                kept += 1
+    if kept:
+        report.append(f"{kept} of {len(subs)} meshes unchanged (original data kept)")
+    if problems:
+        raise BuildError(
+            f"{len(problems)} change(s) in {meta['name']} cannot work in the game:\n  - " + "\n  - ".join(problems)
+            + "\n(Use --experimental to build anyway, e.g. for testing.)"
+        )
+    if strict:
+        budget = len((pkg / "template.binfbx").read_bytes())
+        try:
+            out, notes = model.fit_to_size(template, subs, out_materials, budget)
+        except (model.SizeBudgetError, model.SlotError) as e:
+            raise BuildError(f"{meta['name']}: {e}") from None
+        report.extend(notes)
+    else:
+        out = model.rebuild(template, subs, out_materials)
     result.binfbx = out.to_bytes()
-    report.append(f"meshes: {len(subs)} (LODs {sorted({s.lod for s in subs})}), materials: {len(out_materials)}")
+    report.append(f"meshes: {len(out.meshes)} (LODs {sorted({m.lod for m in out.meshes})}), materials: {len(out.materials)}")
     return result
+
+
+def _signature(positions, uv0, bone_indices, bone_weights) -> np.ndarray:
+    """Per-vertex rows identifying a vertex exactly (positions are exact through the
+    Blender round trip; UVs and the dominant weight are compared on the game's grid)."""
+    rows = [np.ascontiguousarray(positions, np.float32).view(np.int32).reshape(len(positions), 3)]
+    rows.append(np.round(np.asarray(uv0, np.float64) * 4096).astype(np.int64).astype(np.int32))
+    if bone_indices is not None:
+        top = np.argmax(bone_weights, axis=1)
+        rows.append(np.take_along_axis(np.asarray(bone_indices), top[:, None], 1).astype(np.int32))
+        rows.append(np.round(np.take_along_axis(bone_weights, top[:, None], 1) * 255).astype(np.int32))
+    return np.concatenate(rows, axis=1)
+
+
+def same_geometry(a: Submesh, b: Submesh) -> bool:
+    """True if ``b`` (from Blender) is the unedited version of ``a`` (from the game)."""
+    if len(a.faces) != len(b.faces) or not a.uvs or not b.uvs:
+        return False
+    ka = _signature(a.positions, a.uvs[0], a.bone_indices, a.bone_weights)
+    kb = _signature(b.positions, b.uvs[0], b.bone_indices, b.bone_weights)
+    ua, ia = np.unique(ka, axis=0, return_index=True)
+    ub, ib = np.unique(kb, axis=0, return_index=True)
+    if ua.shape != ub.shape or not np.array_equal(ua, ub):
+        return False
+    na, nb = a.normals[ia].astype(np.float64), b.normals[ib].astype(np.float64)
+    return bool(((na * nb).sum(1) > 0.98).all())
 
 
 def _extra_from_template(t: BinFbx, idx: int) -> dict:

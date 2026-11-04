@@ -9,9 +9,9 @@ from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
-from .archive import Archive, FileEntry, normalize
+from .archive import MARKER_OFFSET, Archive, FileEntry, normalize
 
-CTLMOD_MARKER = b"ctlmod\0\0"  # stored in the archive header prefix of archives we create
+CTLMOD_MARKER = b"ctlmod\0\0"  # stored in the unused part of the header of archives we create
 _NAME_RE = re.compile(r"^(?P<ep>[a-z]+\d+)-(?P<patch>\d{3})-(?P<rest>.+)$", re.I)
 
 DEFAULT_GAME_DIRS = [
@@ -37,8 +37,9 @@ def patch_name(base_stem: str, number: int) -> str:
 def is_ctlmod_archive(bin_path: Path) -> bool:
     try:
         with open(bin_path, "rb") as f:
-            head = f.read(33)
-        return head[25:33] == CTLMOD_MARKER
+            head = f.read(153)
+        # current location, and the header prefix used by ctlmod <= 0.1 (still uninstallable)
+        return head[25 + MARKER_OFFSET : 33 + MARKER_OFFSET] == CTLMOD_MARKER or head[25:33] == CTLMOD_MARKER
     except OSError:
         return False
 

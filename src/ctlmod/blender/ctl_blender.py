@@ -64,6 +64,15 @@ def _material(info: dict, meta: dict, pkg: Path) -> bpy.types.Material:
             continue
         img = bpy.data.images.load(str((pkg / png).resolve()), check_existing=True)
         node.image = img
+        shared = rec.get("shared_with") or []
+        if shared:
+            # make it hard to miss that painting this image changes other models too
+            node["ctl_shared_with"] = len(shared)
+            node.label = f"SHARED x{len(shared)}: {param}"
+            node.use_custom_color = True
+            node.color = (0.8, 0.15, 0.1)
+            if not img.name.startswith("SHARED"):
+                img.name = f"SHARED({len(shared)})_{img.name}"
         if param in COLOR_PARAMS:
             tint = next((p["value"] for p in info["params"] if p["name"] == "g_vColorMultiplier"), None)
             if tint and any(abs(c - 1.0) > 1e-3 for c in tint[:3]):
@@ -179,9 +188,39 @@ def do_import(pkg: Path, out_blend: Path):
         if lod > 0:
             layer = bpy.context.view_layer.layer_collection.children[root.name].children[c.name]
             layer.hide_viewport = True
+    _readme(meta)
     out_blend.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(out_blend), relative_remap=True)
     log("saved", out_blend)
+
+
+def _readme(meta: dict):
+    """A text block (Scripting / Text Editor) with the rules and the shared textures."""
+    lines = [
+        f"ctlmod - {meta['name']}",
+        "",
+        "WHAT THE GAME ACCEPTS (see README):",
+        "  * edit, add or delete geometry in LOD0..LOD3; weight new parts to existing bones",
+        "  * use the existing materials only (no copies / new materials)",
+        "  * repaint textures in place (the PNGs in textures/), keeping their resolution",
+        "  * the built model must fit the original file size; LOD1-3 are simplified",
+        "    automatically to make room",
+        "",
+    ]
+    shared = sorted(
+        ((r.get("png") or "", r.get("shared_with") or []) for r in meta["textures"].values() if r.get("shared_with") and r.get("png")),
+        key=lambda t: -len(t[1]),
+    )
+    if shared:
+        lines.append("SHARED TEXTURES - editing these also changes other models:")
+        for png, others in shared:
+            names = ", ".join(o.rsplit("/", 1)[-1].rsplit(".", 1)[0] for o in others[:4])
+            more = f" and {len(others) - 4} more" if len(others) > 4 else ""
+            lines.append(f"  {png:<55} {len(others):>4} other model(s): {names}{more}")
+    else:
+        lines.append("None of this model's textures are used by other models.")
+    txt = bpy.data.texts.new("ctlmod_READ_ME")
+    txt.write("\n".join(lines) + "\n")
 
 
 # =============================================================================== export
