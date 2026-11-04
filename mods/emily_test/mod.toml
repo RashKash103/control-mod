@@ -1,0 +1,12 @@
+# control-mod mod definition
+id = "emily_test"
+name = "Emily Test Mode"
+author = "me"
+version = "1.0.0"
+description = ""
+
+[models]
+
+[models.pope_default_publish]
+source = "data/objects/characters/intermediate/pope_default_publish.binfbx"
+lods = "authored"

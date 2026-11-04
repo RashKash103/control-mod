@@ -181,6 +181,28 @@ Jesse's outfits are `data/objects/characters/intermediate/jesse_<outfit>_publish
 
 (These are the game's internal names; `control-mod render` shows what each looks like.)
 
+**Which model does the game actually use?** Some characters come in two versions, e.g.
+`pope_default_publish` and `pope_default_publish_physx`. They're separate exports of the
+same character (here: a different face rig and eye materials), and often only one of them
+is placed in the game. `--used` shows how many level and effect files reference each
+model, so you mod the right one (or both):
+
+```bash
+uv run control-mod find pope --used
+```
+
+```
+pope_default_publish          5.83 MB  used by   4  data/objects/characters/intermediate/pope_default_publish.binfbx
+pope_default_publish_physx    5.85 MB  unused       data/objects/characters/intermediate/pope_default_publish_physx.binfbx
+```
+
+`info <model> --used` names the files (`hub_npc_pope`, `hub_mission_01_the_bureau`, …) and
+`find --unused` lists models nothing references. The first `--used` indexes the game
+(about 75 seconds); later runs are instant until the game updates. "Unused" means no world
+layer, type table or particle file references the model's resource id — almost
+certainly unused, but not proven. When both versions are used (most of the 17 pairs,
+e.g. the security guards), change both for the mod to show everywhere.
+
 ### 3.2 Create a mod and add models
 
 ```bash
@@ -539,6 +561,9 @@ uv run control-mod install
   contains `jesse_civilian` leaves every other outfit alone — unless it repaints shared
   textures, which `install` and `impact` point out. Put outfits in separate mods if you
   want to toggle them separately.
+* **Removing a mod**: `control-mod remove <mod>` deletes `mods/<mod>/` (its `.blend`
+  files, textures and builds). If the mod is installed, the patch archives are rebuilt
+  without it first (close the game). It asks for confirmation; `--yes` skips that.
 * **Load order**: if two enabled mods change the same file, the one later in
   `control-mod list` wins and `install`/`status` report the conflict.
 * **Safety**: archives written by control-mod carry a marker; `uninstall` deletes only those.
@@ -615,8 +640,8 @@ original's metadata.
 | command | purpose |
 |---|---|
 | `setup [--game] [--blender] [--patch-number]` | configure paths |
-| `find [pattern] [--characters] [--files]` | search models / files |
-| `info <model> [--textures]` | meshes, materials, textures of a model |
+| `find [pattern] [--characters] [--files] [--used] [--unused]` | search models / files; `--used` shows which models the game references |
+| `info <model> [--textures] [--used]` | meshes, materials, textures of a model; `--used` lists the files that use it |
 | `usage <texture>` / `usage <model> --model` | who uses a texture / which of a model's textures are shared |
 | `extract <glob> [-o dir] [--png]` | dump raw game files (textures as PNG) |
 | `new <mod>` | create a mod project |
@@ -628,6 +653,7 @@ original's metadata.
 | `render <mod> [model] [--built] [--view] [--lod]` | preview image |
 | `impact <mod> [--all]` | what the mod changes outside its own models |
 | `list`, `enable`, `disable`, `order` | mod manager |
+| `remove <mod> [--yes]` | delete a mod (uninstalls it first if installed) |
 | `install [--dry-run] [--metadata]`, `uninstall`, `status` | apply / remove mods (`--metadata` writes `.packmeta` even when only size-matched mods are enabled) |
 | `export-loose <dir>` | merged files as folders |
 | `pack <mod> [--sources]`, `unpack <zip>` | share mods |

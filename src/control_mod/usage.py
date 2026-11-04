@@ -1,4 +1,7 @@
-"""Which models use which textures, game-wide - so modders see side effects.
+"""Game-wide indexes: which models use which textures (so modders see side effects),
+and which game files use which models (:class:`ModelRefs`).
+
+Which models use which textures:
 
 Textures are shared: every outfit uses the same face and hand textures, many clothes
 share fabric detail maps, and ``default*.tex`` is used by thousands of models. Editing
@@ -97,3 +100,88 @@ def describe(models: list[str], limit: int = 6) -> str:
     if len(names) <= limit:
         return ", ".join(names)
     return f"{', '.join(names[:limit])} and {len(names) - limit} more"
+
+
+# ------------------------------------------------------------------------------- model references
+
+REFS_VERSION = 1
+# file types that place or spawn models: world layers (entities.bin, tasks.bin), global
+# type tables and particle/graphics graphs - other types never reference models
+REF_SUFFIXES = (".bin", ".particle", ".gfxgraph")
+
+
+class ModelRefs:
+    """Which game files reference each model (``model path -> sorted file paths``).
+
+    Files refer to models by resource id (CityHash64 of the path, see
+    :func:`control_mod.packmeta.resource_id`), so the scan looks for the 64-bit ids of all
+    models in world layers, global type tables and particle files (about 75 s, cached).
+    A model nothing references is almost certainly unused by the game.
+    """
+
+    def __init__(self, refs: dict[str, list[str]]):
+        self.refs = refs
+
+    def files_using(self, model: str) -> list[str]:
+        return self.refs.get(normalize(model), [])
+
+    @classmethod
+    def scan(cls, gd: GameData, progress: Callable[[str], None] | None = None) -> "ModelRefs":
+        import numpy as np
+
+        from .packmeta import resource_id
+
+        models = sorted({normalize(p) for p in gd.index if p.lower().endswith(".binfbx")})
+        by_id = {resource_id(m): m for m in models}
+        ids = np.array(sorted(by_id), dtype=np.uint64)
+        refs: dict[str, set[str]] = defaultdict(set)
+        for a in gd.archives:
+            entries = sorted((e for e in a.entries if e.name.lower().endswith(REF_SUFFIXES)), key=lambda e: e.offset)
+            if not entries:
+                continue
+            if progress:
+                progress(f"  scanning {len(entries)} files in {a.bin_path.stem} ...")
+            with open(a.rmdp_path, "rb") as f:
+                for e in entries:
+                    f.seek(e.offset)
+                    data = f.read(e.size)
+                    found: set[int] = set()
+                    for off in range(8):  # ids are stored at any alignment
+                        n = (len(data) - off) // 8
+                        if n > 0:
+                            arr = np.frombuffer(data, dtype="<u8", count=n, offset=off)
+                            found.update(arr[np.isin(arr, ids)].tolist())
+                    for rid in found:
+                        refs[by_id[rid]].add(normalize(e.path))
+        return cls({m: sorted(v) for m, v in refs.items()})
+
+    @classmethod
+    def load(cls, gd: GameData, cache_dir: Path, progress: Callable[[str], None] | None = print) -> "ModelRefs":
+        cache = cache_dir / "model_refs.json"
+        stamp = TextureUsage._stamp(gd)
+        if cache.exists():
+            try:
+                d = json.loads(cache.read_text())
+                if d.get("version") == REFS_VERSION and d.get("stamp") == stamp:
+                    return cls(d["refs"])
+            except (ValueError, KeyError):
+                pass
+        if progress:
+            progress("indexing which models the game uses (one-time, ~75 s) ...")
+        refs = cls.scan(gd, progress)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps({"version": REFS_VERSION, "stamp": stamp, "refs": refs.refs}))
+        return refs
+
+
+def describe_refs(files: list[str], limit: int = 3) -> str:
+    """``used by 4 files: hub_npc_pope, ...`` with world layers named by their folder."""
+    if not files:
+        return "not referenced by any level or effect - probably unused"
+    names = []
+    for f in files:
+        parts = f.split("/")
+        names.append(parts[-2] if parts[-1] in ("entities.bin", "tasks.bin") and len(parts) > 1 else Path(f).name)
+    names = list(dict.fromkeys(names))
+    more = f" and {len(names) - limit} more" if len(names) > limit else ""
+    return f"used by {len(files)} file(s): {', '.join(names[:limit])}{more}"

@@ -76,8 +76,19 @@ def cmd_find(cfg: Config, a) -> None:
     hits = gd.models(a.pattern)
     if a.characters:
         hits = [h for h in hits if "/characters/" in h.entry.path.lower()]
+    refs = None
+    if a.used or a.unused:
+        from .usage import ModelRefs
+
+        refs = ModelRefs.load(gd, cfg.state_dir)
+        if a.unused:
+            hits = [h for h in hits if not refs.files_using(h.entry.path)]
     for h in hits[: a.limit]:
-        print(f"{Path(h.entry.path).stem:<55} {h.entry.size / 1e6:7.2f} MB  {h.entry.path}")
+        used = ""
+        if refs is not None:
+            n = len(refs.files_using(h.entry.path))
+            used = f"  {'unused' if not n else f'used by {n:>3}':<11}"
+        print(f"{Path(h.entry.path).stem:<55} {h.entry.size / 1e6:7.2f} MB{used}  {h.entry.path}")
     more = f" (showing {a.limit}; use --limit)" if len(hits) > a.limit else ""
     print(f"{len(hits)} models{more}")
 
@@ -92,6 +103,11 @@ def cmd_info(cfg: Config, a) -> None:
     f = BinFbx.parse(gd.read(path))
     print(f"{path}  [{loc.archive_name}]")
     print(f"bones: {len(f.bones)}  LODs: {f.lod_count}  meshes: {len(f.meshes)}  shadow meshes: {len(f.shadow_meshes)}")
+    if a.used:
+        from .usage import ModelRefs, describe_refs
+
+        files = ModelRefs.load(gd, cfg.state_dir).files_using(path)
+        print(describe_refs(files, limit=len(files) or 1))
     if f.variants:
         print("material variants:", ", ".join(v[0].text for v in f.variants))
     print("meshes:")
@@ -265,6 +281,33 @@ def cmd_enable(cfg: Config, a, value: bool) -> None:
         st.enabled[m] = value
     st.save()
     print(("enabled " if value else "disabled ") + ", ".join(a.mods) + ". Run 'control-mod install' to apply.")
+
+
+def cmd_remove(cfg: Config, a) -> None:
+    import shutil
+
+    from . import installer
+    from .project import Mod
+
+    mod = Mod.load(cfg, a.mod)
+    st = _state(cfg)
+    installed = a.mod in st.installed.get("mods", [])
+    print(f"this deletes {mod.root} - the mod's .blend files, textures and builds")
+    if installed:
+        print("it is installed: the patch archives are rebuilt without it (close the game first)")
+    if not a.yes:
+        if not sys.stdin.isatty():
+            raise SystemExit("not deleting without confirmation: pass --yes")
+        if input(f"delete mod '{a.mod}'? [y/N] ").strip().lower() not in ("y", "yes"):
+            raise SystemExit("cancelled")
+    if installed:
+        st.enabled[a.mod] = False
+        st.save()
+        installer.install(cfg, _gd(cfg), st)
+    shutil.rmtree(mod.root)
+    st = _state(cfg)  # forgets the deleted mod
+    st.save()
+    print(f"removed '{a.mod}'")
 
 
 def cmd_order(cfg: Config, a) -> None:
@@ -476,12 +519,16 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("pattern", nargs="?", default="*", help="substring or glob, e.g. jesse or *civilian*")
     s.add_argument("--characters", action="store_true", help="only models under objects/characters")
     s.add_argument("--files", action="store_true", help="search all files, not just models")
+    s.add_argument("--used", action="store_true",
+                   help="show how many level/effect files use each model (first run indexes the game, ~75 s)")
+    s.add_argument("--unused", action="store_true", help="only models nothing in the game references")
     s.add_argument("--limit", type=int, default=200)
     s.set_defaults(func=cmd_find)
 
     s = sub.add_parser("info", help="show meshes, materials and textures of a model")
     s.add_argument("model")
     s.add_argument("--textures", action="store_true", help="list texture files per material")
+    s.add_argument("--used", action="store_true", help="list the level/effect files that use the model")
     s.set_defaults(func=cmd_info)
 
     s = sub.add_parser("extract", help="extract raw game files matching a glob")
@@ -555,6 +602,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("disable", help="disable mods")
     s.add_argument("mods", nargs="+")
     s.set_defaults(func=lambda c, a: cmd_enable(c, a, False))
+    s = sub.add_parser("remove", help="delete a mod (uninstalling it first if it is installed)")
+    s.add_argument("mod")
+    s.add_argument("--yes", "-y", action="store_true", help="don't ask for confirmation")
+    s.set_defaults(func=cmd_remove)
+
     s = sub.add_parser("order", help="move a mod to a load-order position (1 = lowest priority)")
     s.add_argument("mod")
     s.add_argument("position", type=int)

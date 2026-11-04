@@ -82,3 +82,65 @@ def test_install_reports_shared_impact(tmp_path):
     lines = []
     installer.install(cfg, gd, st, dry_run=True, log=lines.append)
     assert any("edits shared textures" in ln and "2 other model(s)" in ln for ln in lines)
+
+
+# ------------------------------------------------------------------ which models the game uses
+
+
+def test_model_refs_find_resource_ids_at_any_alignment(tmp_path):
+    from control_mod.packmeta import resource_id
+    from control_mod.usage import ModelRefs, describe_refs
+
+    gd = make_game(tmp_path)
+    rid = lambda m: resource_id(f"data/objects/characters/{m}.binfbx").to_bytes(8, "little")
+    write_archive(gd.pack_dir / "ep101-000-generic", [
+        ("data/worlds/gameworld/layers/hub_npc_a/entities.bin", b"\x01\x02\x03" + rid("outfit_a") + b"\x00" * 5),
+        ("data/worlds/gameworld/episodes/x/tasks.bin", b"\x00" * 8 + rid("outfit_a") + rid("outfit_b")),
+        ("data/text/strings.txt", rid("outfit_c")),  # not a type that places models
+    ])
+    refs = ModelRefs.scan(GameData(gd.game_dir))
+    assert refs.files_using("data/objects/characters/outfit_a.binfbx") == [
+        "data/worlds/gameworld/episodes/x/tasks.bin", "data/worlds/gameworld/layers/hub_npc_a/entities.bin"]
+    assert refs.files_using(r"DATA\objects\characters\outfit_b.binfbx") == ["data/worlds/gameworld/episodes/x/tasks.bin"]
+    assert refs.files_using("data/objects/characters/outfit_c.binfbx") == []
+    assert describe_refs(refs.files_using("data/objects/characters/outfit_a.binfbx")) == "used by 2 file(s): x, hub_npc_a"
+    assert "probably unused" in describe_refs([])
+    calls = []
+    ModelRefs.load(GameData(gd.game_dir), tmp_path / "state", progress=calls.append)
+    calls.clear()
+    ModelRefs.load(GameData(gd.game_dir), tmp_path / "state", progress=calls.append)
+    assert not calls  # cached
+
+
+def test_remove_deletes_and_uninstalls(tmp_path, monkeypatch):
+    import argparse
+
+    from control_mod import cli
+
+    gd = make_game(tmp_path)
+    cfg = Config(tmp_path / "ws", game_dir=gd.game_dir)
+    for mod_id in ("keep", "gone"):
+        mod = Mod.create(cfg, mod_id)
+        files = mod.build_dir / "files" / "data/objects/characters"
+        files.mkdir(parents=True)
+        (files / "outfit_b.binfbx").write_bytes(model_bytes(FACE))
+        mod.manifest_path.write_text(json.dumps({"id": mod_id, "files": [
+            {"path": "data/objects/characters/outfit_b.binfbx", "archive": "ep100-000-generic", "new": False,
+             "model": "outfit_b"}]}))
+    st = cli._state(cfg)
+    installer.install(cfg, gd, st, log=lambda s: None)
+    assert sorted(State.load(cfg).installed["mods"]) == ["gone", "keep"]
+
+    monkeypatch.setattr("sys.stdin.isatty", lambda: False)
+    try:
+        cli.cmd_remove(cfg, argparse.Namespace(mod="gone", yes=False))
+        raise AssertionError("removed without confirmation")
+    except SystemExit as e:
+        assert "--yes" in str(e)
+    assert (cfg.mods_dir / "gone").exists()
+
+    cli.cmd_remove(cfg, argparse.Namespace(mod="gone", yes=True))
+    assert not (cfg.mods_dir / "gone").exists()
+    st = State.load(cfg)
+    assert st.order == ["keep"] and "gone" not in st.enabled
+    assert st.installed["mods"] == ["keep"]  # patch archives rebuilt without it
