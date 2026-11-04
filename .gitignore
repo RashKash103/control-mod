@@ -1,0 +1,17 @@
+work/
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+backups/
+dist/
+mods/*/build/
+mods/*/renders/
+mods/*/.preview/
+mods/*/models/*/blender_export/
+*.blend1
+.ctlmod/
+# extracted game assets (large, copyrighted) - recreate with `ctlmod add`
+mods/*/models/
+# machine-specific paths - recreate with `ctlmod setup`
+ctlmod.toml

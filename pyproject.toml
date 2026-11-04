@@ -1,0 +1,31 @@
+[project]
+name = "ctlmod"
+version = "0.1.0"
+description = "Control: Ultimate Edition outfit and model modding toolkit (Blender workflow + mod manager)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "etcpak>=0.9.15",
+    "numpy>=2.5.4",
+    "pillow>=13.0.0",
+    "texture2ddecoder>=1.0.6",
+]
+
+[build-system]
+requires = ["uv_build>=0.13.7,<0.14.0"]
+build-backend = "uv_build"
+
+[project.scripts]
+ctlmod = "ctlmod.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "game: needs the Control game files",
+    "blender: needs Blender",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]
