@@ -25,23 +25,28 @@ from .config import Config, write_toml
 from .gamedata import GameData
 
 BLENDER_SCRIPT = Path(__file__).parent / "blender" / "ctl_blender.py"
+TOOLS_SCRIPT = Path(__file__).parent / "blender" / "control_mod_tools.py"
 LOD_MODES = ("authored", "copy", "decimate")
 _ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
-def run_blender(cfg: Config, args: list[str], blend: Path | None = None, log: Callable[[str], None] = print) -> None:
+def run_blender(cfg: Config, args: list[str], blend: Path | None = None, log: Callable[[str], None] = print,
+                script: Path = BLENDER_SCRIPT, show_all: bool = False, ok_codes: tuple[int, ...] = (0,)) -> int:
+    """Run a control-mod script in a background Blender; returns its exit code."""
     exe = cfg.require_blender()
     cmd = [str(exe), "--background"]
     cmd += [str(blend)] if blend else ["--factory-startup"]
-    cmd += ["--python", str(BLENDER_SCRIPT), "--", *args]
+    cmd += ["--python", str(script), "--", *args]
     proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     lines = (proc.stdout + proc.stderr).splitlines()
+    prefix = "[control-mod] "
     for ln in lines:
-        if ln.startswith("[control-mod]") and ("warning" in ln or "note" in ln or "exported" in ln or "saved" in ln or "rendered" in ln):
-            log("  blender: " + ln[9:])
-    if proc.returncode != 0 or any("Traceback" in ln for ln in lines):
+        if ln.startswith(prefix) and (show_all or any(w in ln for w in ("warning", "note", "exported", "saved", "rendered"))):
+            log(("  " if show_all else "  blender: ") + ln[len(prefix):])
+    if proc.returncode not in ok_codes or any("Traceback" in ln for ln in lines):
         tail = "\n".join(lines[-40:])
         raise RuntimeError(f"Blender failed (exit {proc.returncode}):\n{tail}")
+    return proc.returncode
 
 
 @dataclass

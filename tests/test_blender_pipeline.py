@@ -10,7 +10,7 @@ from conftest import BLENDER, needs_blender, needs_game
 from control_mod import package
 from control_mod.binfbx import BinFbx
 from control_mod.geometry import decode
-from control_mod.project import BLENDER_SCRIPT
+from control_mod.project import BLENDER_SCRIPT, TOOLS_SCRIPT
 
 pytestmark = [needs_game, needs_blender, pytest.mark.blender]
 ROOT = Path(__file__).resolve().parents[1]
@@ -152,3 +152,94 @@ def test_render_preview(pkg, tmp_path):
     out = tmp_path / "front.png"
     blender("render", out, blend=pkg / "model.blend")
     assert out.exists() and out.stat().st_size > 10_000
+
+
+# ------------------------------------------------------------------ control-mod tools (adopt / check)
+
+MAKE_GLB = """
+import bpy, sys
+out = sys.argv[sys.argv.index("--") + 1]
+for o in list(bpy.data.objects):
+    bpy.data.objects.remove(o)
+bpy.ops.object.armature_add(location=(0, 0, 0))
+rig = bpy.context.active_object
+rig.name = "SomeoneElsesRig"
+bpy.ops.mesh.primitive_uv_sphere_add(radius=0.12, location=(0, -0.12, 1.35))
+part = bpy.context.active_object
+part.name = "chest_piece"
+img = bpy.data.images.new("chest_piece_albedo", 37, 23)
+img.pixels.foreach_set([0.2, 0.9, 0.3, 1.0] * (37 * 23))
+img.pack()
+mat = bpy.data.materials.new("Chest Piece")
+mat.use_nodes = True
+tex = mat.node_tree.nodes.new("ShaderNodeTexImage")
+tex.image = img
+bsdf = mat.node_tree.nodes["Principled BSDF"]
+mat.node_tree.links.new(tex.outputs["Color"], bsdf.inputs["Base Color"])
+bsdf.inputs["Roughness"].default_value = 0.3
+part.data.materials.append(mat)
+part.vertex_groups.new(name="Bone").add(range(len(part.data.vertices)), 1.0, "REPLACE")
+part.parent = rig
+part.modifiers.new("Armature", "ARMATURE").object = rig
+bpy.ops.export_scene.gltf(filepath=out, export_format="GLB")
+"""
+
+
+def tools(blend, *args, ok=(0,)):
+    cmd = [str(BLENDER), "--background", str(blend), "--python", str(TOOLS_SCRIPT), "--", *map(str, args)]
+    p = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+    out = p.stdout + p.stderr
+    assert p.returncode in ok and "Traceback" not in out, out[-3000:]
+    return p.returncode, out
+
+
+def test_tools_embedded_in_new_blends(pkg):
+    script = "import bpy; t = bpy.data.texts.get('control_mod_tools.py'); print('TOOLS', bool(t and t.use_module))"
+    cmd = [str(BLENDER), "--background", str(pkg / "model.blend"), "--python-expr", script]
+    assert "TOOLS True" in subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
+
+
+def test_adopt_glb_then_build(pkg, game, tmp_path):
+    glb = tmp_path / "part.glb"
+    maker = tmp_path / "make_glb.py"
+    maker.write_text(MAKE_GLB)
+    p = subprocess.run([str(BLENDER), "--background", "--factory-startup", "--python", str(maker), "--", str(glb)],
+                       capture_output=True, text=True, encoding="utf-8", errors="replace")
+    assert glb.exists(), (p.stdout + p.stderr)[-2000:]
+    blend = pkg / "adopt.blend"  # next to textures/
+    blend.write_bytes((pkg / "model.blend").read_bytes())
+    _, out = tools(blend, "adopt", "--import", glb, "--save")
+    assert "material chest_piece: copy of" in out and "weights copied" in out
+    code, out = tools(blend, "check", ok=(0, 2))
+    assert code == 0, out[-3000:]
+    assert "chest_piece" not in out  # no warnings about the adopted part (e.g. unweighted vertices)
+
+    blender("export", pkg, blend=blend)
+    res = package.build_from_blender(pkg, read_texture=game.try_read, log=lambda s: None, size_budget=False)
+    out_fbx = BinFbx.parse(res.binfbx)
+    names = [m.name.text for m in out_fbx.materials]
+    assert "chest_piece" in names
+    orig = BinFbx.parse(game.read(MODEL))
+    assert len(out_fbx.meshes) == len(orig.meshes) + 1
+    # every slot of the copied material got a new texture with the replaced texture's size
+    assert res.derived and all(len(res.textures[p]) == len(game.read(like)) for p, like in res.derived.items())
+    part = next(s for s in decode(out_fbx) if s.material == names.index("chest_piece") and s.lod == 0)
+    assert np.allclose(part.bone_weights.sum(1), 1, atol=1e-3)
+    assert len(np.unique(part.bone_indices[part.bone_weights > 0.05])) > 1  # weighted to the torso, not one bone
+    green = next(p for p in res.derived if p.endswith("_g_scolormap.tex"))
+    assert green
+
+
+def test_check_reports_problems(pkg, tmp_path):
+    blend = pkg / "bad.blend"
+    blend.write_bytes((pkg / "model.blend").read_bytes())
+    script = (
+        "import bpy\n"
+        "bpy.ops.mesh.primitive_cube_add(size=0.1)\n"
+        "bpy.context.active_object.data.materials.append(bpy.data.materials.new('plain'))\n"
+        "bpy.ops.wm.save_mainfile()\n"
+    )
+    subprocess.run([str(BLENDER), "--background", str(blend), "--python-expr", script], capture_output=True)
+    code, out = tools(blend, "check", ok=(2,))
+    assert "material 'plain' is not a game material" in out
+    assert "not in a LOD collection" in out and "no bone weights" in out

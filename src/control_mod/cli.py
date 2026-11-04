@@ -148,14 +148,49 @@ def cmd_add(cfg: Config, a) -> None:
 
 
 def cmd_open(cfg: Config, a) -> None:
-    from .project import Mod
+    from .project import TOOLS_SCRIPT, Mod
 
     mod = Mod.load(cfg, a.mod)
     names = mod.resolve_model(a.model)
     blend = mod.blend_path(names[0])
     exe = cfg.require_blender()
-    print(f"opening {blend}")
-    subprocess.Popen([str(exe), str(blend)])
+    print(f"opening {blend}  (tools: sidebar > Control Mod)")
+    subprocess.Popen([str(exe), str(blend), "--python", str(TOOLS_SCRIPT)])
+
+
+def cmd_adopt(cfg: Config, a) -> None:
+    from .project import TOOLS_SCRIPT, Mod, run_blender
+
+    mod = Mod.load(cfg, a.mod)
+    names = mod.resolve_model(a.model)
+    if len(names) > 1:
+        raise SystemExit(f"mod '{mod.id}' has several models; name one: {', '.join(names)}")
+    src = Path(a.file).resolve()
+    if not src.is_file():
+        raise SystemExit(f"no such file: {src}")
+    args = ["adopt", "--import", str(src), "--lod", str(a.lod), "--weights", a.weights, "--save"]
+    if a.material:
+        args += ["--material", a.material]
+    if a.bone:
+        args += ["--bone", a.bone]
+    if a.flip_green:
+        args.append("--flip-green")
+    print(f"adopting {src.name} into {names[0]} ...")
+    run_blender(cfg, args, blend=mod.blend_path(names[0]), script=TOOLS_SCRIPT, show_all=True)
+    print(f"done. Check it in Blender (control-mod open {mod.id}), then: control-mod build {mod.id}")
+
+
+def cmd_check(cfg: Config, a) -> None:
+    from .project import TOOLS_SCRIPT, Mod, run_blender
+
+    mod = Mod.load(cfg, a.mod)
+    failed = False
+    for name in mod.resolve_model(a.model):
+        print(f"{name}:")
+        code = run_blender(cfg, ["check"], blend=mod.blend_path(name), script=TOOLS_SCRIPT, show_all=True, ok_codes=(0, 2))
+        failed |= code == 2
+    if failed:
+        raise SystemExit(1)
 
 
 def cmd_build(cfg: Config, a) -> None:
@@ -474,6 +509,24 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("mod")
     s.add_argument("model", nargs="?")
     s.set_defaults(func=cmd_open)
+
+    s = sub.add_parser("adopt", help="import a glb/gltf/fbx/obj/blend into a mod's .blend and make it game-ready")
+    s.add_argument("mod")
+    s.add_argument("file", help="the model file to import")
+    s.add_argument("--model", help="which of the mod's models (if it has several)")
+    s.add_argument("--material", help="game material new materials are copies of (default: automatic)")
+    s.add_argument("--lod", type=int, default=0, help="LOD collection to put it in (default 0)")
+    s.add_argument("--weights", choices=["transfer", "auto", "bone", "keep"], default="transfer",
+                   help="transfer: from the nearest body/clothing (default); auto: bone heat; "
+                        "bone: rigid to --bone; keep: keep groups named after game bones")
+    s.add_argument("--bone", help="bone for --weights bone (default C_spine2_JNT)")
+    s.add_argument("--flip-green", action="store_true", help="flip the normal maps' green channel")
+    s.set_defaults(func=cmd_adopt)
+
+    s = sub.add_parser("check", help="list what the build would refuse in a mod's .blend files")
+    s.add_argument("mod")
+    s.add_argument("model", nargs="?")
+    s.set_defaults(func=cmd_check)
 
     s = sub.add_parser("build", help="turn the mod's .blend files into game files")
     s.add_argument("mod")

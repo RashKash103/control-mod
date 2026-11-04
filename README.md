@@ -1,16 +1,31 @@
 # control-mod — outfit & model modding for Control: Ultimate Edition
 
+> [!WARNING]
+> **This project was built by AI.** control-mod's code, tests and documentation were written by
+> AI agents (Claude Opus 5.5) directed by RashKash103, and have not been fully reviewed by a human.
+> The file formats were reverse engineered; what works in game was confirmed on one PC with the
+> Steam version. It adds files to your game folder (it never changes the original ones), and a bad
+> mod can crash the game: back up your saves (`control-mod backup-saves`), and verify everything
+> yourself before you rely on it.
+
+[![CI](https://github.com/RashKash103/control-mod/actions/workflows/ci.yml/badge.svg)](https://github.com/RashKash103/control-mod/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.12%2B-3776AB)
+![Blender](https://img.shields.io/badge/Blender-4.2%2B-E87D0D)
+![Platform](https://img.shields.io/badge/platform-Windows-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Status](https://img.shields.io/badge/status-early-orange)
+
 `control-mod` lets you take any character model out of Control, edit it in Blender
 (reshape and remodel meshes, add new pieces, re-weight, repaint textures, add new
 materials and textures), turn it back into game files, and install it with a small mod
 manager that can switch individual outfit mods on and off without touching the
 original game files.
 
-```
-game archives ──export──▶ model package ──import──▶ .blend  (you edit here)
-                                                      │
-game ◀──install── patch archives ◀──compose── mod build ◀──build──┘
-```
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/diagrams/workflow-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/diagrams/workflow-light.svg">
+  <img alt="control-mod workflow: game archives are exported by 'add' into a model package and a .blend you edit; 'build' writes the mod's files; 'install' merges enabled mods into patch archives with .packmeta, which the game loads over the originals" src="docs/diagrams/workflow-light.svg" width="100%">
+</picture>
 
 * Works for **any** model: everything is discovered by reading the game's archives —
   nothing is hard-coded per character. `control-mod find --characters` lists 180+
@@ -190,10 +205,30 @@ A mod can contain several models (e.g. several outfits); run `add` once per mode
 ### 3.3 Edit
 
 Open the `.blend` (`control-mod open red_casual`) and edit — see
-[section 4](#4-editing-in-blender--rules-of-the-road). Remember to **save** the
-`.blend` and any texture you painted. The `.blend` contains a text block
-**`control-mod_READ_ME`** (Scripting workspace / Text Editor) with these rules and the list
-of shared textures.
+[section 4](#4-editing-in-blender--rules-of-the-road) and the full
+**[Blender guide](docs/BLENDER.md)**. Remember to **save** the `.blend` and any texture
+you painted. The `.blend` contains a text block **`control-mod_READ_ME`** (Text Editor)
+with the rules in short and the list of shared textures.
+
+The 3D view's sidebar (N) has a **Control Mod** tab with tools: adopt imported models,
+copy materials, new textures, save images, show one LOD, check for problems, and save &
+build. Before building, check from the command line too:
+
+```bash
+uv run control-mod check red_casual
+```
+
+To bring in a model made elsewhere (glb, gltf, fbx, obj, blend), the `adopt` command
+imports it and makes it game-ready — game-material copies with converted textures,
+weights copied from the body, the game skeleton, a LOD collection:
+
+```bash
+uv run control-mod adopt red_casual jacket.glb
+```
+
+Place it on the character before exporting it from the other tool, or import it in
+Blender, move it into place and use *Adopt selected* in the sidebar instead. Details:
+[Bringing in outside models](docs/BLENDER.md#bringing-in-outside-models-glb-fbx-obj).
 
 ### 3.4 Build
 
@@ -261,6 +296,10 @@ Quit the game before installing or uninstalling (the game keeps archives open).
 ---
 
 ## 4. Editing in Blender — rules of the road
+
+This is the summary; [docs/BLENDER.md](docs/BLENDER.md) covers every detail for Blender
+artists (what the build does with geometry, normals, UVs, weights, materials, textures,
+LODs and imported models).
 
 The `.blend` contains:
 
@@ -340,8 +379,9 @@ You control **which material each face uses**, **which textures a material uses*
   by this model. It must have the **same resolution as the texture it replaces** (the
   new texture's metadata is copied from that one). Pointing at another texture of the
   model (an existing exported PNG) reuses that game texture.
-* **New materials**: duplicate a material (*Material → Copy*, or the `+` copy button in
-  the slot list), rename it and assign it to faces. The copy keeps the original's shader
+* **New materials**: duplicate a material (the *New Material* button next to its name in
+  the Material properties, or the sidebar's *Copy material*), rename it and assign it to
+  faces. The copy keeps the original's shader
   and parameters; change its images as above. Good for making one piece look different
   without touching the rest of the outfit (the example mod's gold halo). Materials not
   copied from a game material (a fresh *New* material) are refused, since the game needs
@@ -393,6 +433,12 @@ keeps its original geometry in `decimate`/`copy` modes.
 With `authored`, LODs you didn't touch keep the **original** look — fine for
 texture-only mods, visible at distance if you changed LOD0's shape (then use
 `decimate`, or edit the LOD collections too).
+
+Replacing several meshes with one (say, torso and legs with one bodysuit) works: keep
+both materials on the new mesh and each part lands in its original slot, or use one
+material and delete the old objects (they become invisible placeholders). Do the same in
+LOD1–3 or use `decimate`. See
+[How objects become game meshes](docs/BLENDER.md#how-objects-become-game-meshes).
 
 ---
 
@@ -550,6 +596,9 @@ restore, quit the game, pause Steam Cloud, and copy the files back.
 | model looks fine close up but wrong far away | stale LODs with `authored` → `--lods decimate`, or edit LOD1–3 |
 | textures look washed out / wrong in Blender | Blender preview ≠ game shader; normal/mask maps are Non-Color |
 | `add --force` lost my edits | `--force` re-exports from the game; keep backups of your `.blend` |
+| build: `Blender material '…' is not linked to a game material` | imported or *New* material: run *Adopt selected* / `control-mod adopt`, or use a duplicate of a game material |
+| build: `image … is packed or not saved to a file` | sidebar > *Save images* |
+| no **Control Mod** tab in Blender | open with `control-mod open`, or allow scripts / run the `control_mod_tools.py` text block |
 | Blender failed: … | the error tail is printed; run the shown Blender command yourself to see the full log |
 
 When the game crashes, Windows logs where: *Event Viewer → Windows Logs →
@@ -572,7 +621,9 @@ original's metadata.
 | `extract <glob> [-o dir] [--png]` | dump raw game files (textures as PNG) |
 | `new <mod>` | create a mod project |
 | `add <mod> <model> [--lods] [--force]` | extract a model and create its `.blend` |
-| `open <mod> [model]` | open the `.blend` in Blender |
+| `open <mod> [model]` | open the `.blend` in Blender (with the Control Mod sidebar tools) |
+| `adopt <mod> <file> [--model] [--material] [--lod] [--weights] [--bone] [--flip-green]` | import a glb/gltf/fbx/obj/blend into the mod's `.blend` and make it game-ready |
+| `check <mod> [model]` | list what the build would refuse (and likely problems) in the `.blend` files |
 | `build <mod> [--lods] [--install] [--size-matched] [--experimental]` | `.blend` → game files (checked against what the game accepts) |
 | `render <mod> [model] [--built] [--view] [--lod]` | preview image |
 | `impact <mod> [--all]` | what the mod changes outside its own models |
@@ -602,8 +653,11 @@ src/control_mod/
   installer.py   mod manager, patch archives and their metadata
   cli.py         command line
   blender/ctl_blender.py   runs inside Blender (import/export/render)
+  blender/control_mod_tools.py   Blender sidebar tools: adopt, check, materials, textures
 examples/demo_edit.py      scripted Blender edits (halo, new material/texture, recolour)
+docs/BLENDER.md            guide for Blender artists
 docs/FORMATS.md            file format notes
+docs/diagrams/             diagram sources (fireworks-tech-graph)
 tests/                     pytest suite
 ```
 

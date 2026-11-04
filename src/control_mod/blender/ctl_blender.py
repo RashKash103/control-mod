@@ -189,6 +189,7 @@ def do_import(pkg: Path, out_blend: Path):
             layer = bpy.context.view_layer.layer_collection.children[root.name].children[c.name]
             layer.hide_viewport = True
     _readme(meta)
+    _tools_text_block()
     out_blend.parent.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(out_blend), relative_remap=True)
     log("saved", out_blend)
@@ -199,12 +200,13 @@ def _readme(meta: dict):
     lines = [
         f"control-mod - {meta['name']}",
         "",
-        "WHAT THE GAME ACCEPTS (see README):",
-        "  * edit, add or delete geometry in LOD0..LOD3; weight new parts to existing bones",
-        "  * use the existing materials only (no copies / new materials)",
-        "  * repaint textures in place (the PNGs in textures/), keeping their resolution",
-        "  * the built model must fit the original file size; LOD1-3 are simplified",
-        "    automatically to make room",
+        "RULES (full guide: docs/BLENDER.md in the control-mod repository):",
+        "  * edit, add or delete geometry in the LOD0..LOD3 collections",
+        "  * weight new parts to the existing bones (no new/renamed bones)",
+        "  * materials: the game's, or duplicates of them - not new ones",
+        "  * textures: repaint in place, or new images with the resolution of the slot",
+        "  * imported models (glb/fbx/obj): select them, sidebar > Control Mod > Adopt selected",
+        "  * sidebar > Control Mod > Check lists what the build would refuse",
         "",
     ]
     shared = sorted(
@@ -221,6 +223,15 @@ def _readme(meta: dict):
         lines.append("None of this model's textures are used by other models.")
     txt = bpy.data.texts.new("control-mod_READ_ME")
     txt.write("\n".join(lines) + "\n")
+
+
+def _tools_text_block():
+    """Embed the control-mod tools (sidebar panel), registered when the file is opened."""
+    src = Path(__file__).with_name("control_mod_tools.py")
+    if src.exists():
+        txt = bpy.data.texts.new("control_mod_tools.py")
+        txt.write(src.read_text(encoding="utf-8"))
+        txt.use_module = True
 
 
 # =============================================================================== export
@@ -355,7 +366,7 @@ def _dump_object(ob, arm, lod: int, decimate_ratio: float | None, meshes: list, 
 def do_export(pkg: Path, lods: str):
     meta = json.loads((pkg / "model.json").read_text())
     arm = next((o for o in bpy.data.objects if o.type == "ARMATURE"), None)
-    objs = [o for o in bpy.data.objects if o.type == "MESH" and not o.name.startswith("_")]
+    objs = [o for o in bpy.context.scene.objects if o.type == "MESH" and not o.name.startswith("_")]
     by_lod: dict[int, list] = {}
     for o in objs:
         lod = _lod_of(o)
@@ -389,7 +400,12 @@ def do_export(pkg: Path, lods: str):
         if mat.use_nodes:
             for n in mat.node_tree.nodes:
                 if n.type == "TEX_IMAGE" and n.get("ctl_param") and n.image is not None:
-                    tex[n["ctl_param"]] = _image_path(n.image)
+                    path = _image_path(n.image)
+                    if not path or n.image.packed_file is not None:
+                        log(f"warning: image '{n.image.name}' ({name}: {n['ctl_param']}) is packed or not saved "
+                            "to a file; keeping the original texture (Control Mod > Save images)")
+                        continue
+                    tex[n["ctl_param"]] = path
         mats.append({
             "name": name,
             "ctl_material": mat.get("ctl_material"),

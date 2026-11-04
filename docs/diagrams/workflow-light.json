@@ -1,0 +1,255 @@
+{
+ "schema_version": 1,
+ "mode": "architecture",
+ "text_policy": "strict",
+ "template_type": "architecture",
+ "style": 1,
+ "width": 960,
+ "height": 690,
+ "title": "control-mod workflow",
+ "subtitle": "game archives to Blender and back, installed as removable patch archives",
+ "containers": [
+  {
+   "id": "game",
+   "x": 40,
+   "y": 110,
+   "width": 880,
+   "height": 130,
+   "label": "Game"
+  },
+  {
+   "id": "cli",
+   "x": 40,
+   "y": 280,
+   "width": 880,
+   "height": 130,
+   "label": "CLI"
+  },
+  {
+   "id": "mod",
+   "x": 40,
+   "y": 450,
+   "width": 880,
+   "height": 130,
+   "label": "Mod"
+  }
+ ],
+ "nodes": [
+  {
+   "id": "archives",
+   "kind": "rect",
+   "x": 70,
+   "y": 150,
+   "width": 180,
+   "height": 60,
+   "label": "Game archives",
+   "sublabel": ".bin/.rmdp + .packmeta",
+   "fill": "#eff6ff",
+   "stroke": "#3b82f6",
+   "flat": true
+  },
+  {
+   "id": "control",
+   "kind": "rect",
+   "x": 395,
+   "y": 150,
+   "width": 180,
+   "height": 60,
+   "label": "Control",
+   "sublabel": "patches override originals",
+   "fill": "#eff6ff",
+   "stroke": "#3b82f6",
+   "flat": true
+  },
+  {
+   "id": "patch",
+   "kind": "rect",
+   "x": 720,
+   "y": 150,
+   "width": 180,
+   "height": 60,
+   "label": "Patch archives",
+   "sublabel": "ep100-001-* + .packmeta",
+   "fill": "#eff6ff",
+   "stroke": "#3b82f6",
+   "flat": true
+  },
+  {
+   "id": "add",
+   "kind": "rect",
+   "x": 70,
+   "y": 320,
+   "width": 180,
+   "height": 60,
+   "label": "add",
+   "sublabel": "export model + textures",
+   "fill": "#fff7ed",
+   "stroke": "#f97316",
+   "flat": true
+  },
+  {
+   "id": "build",
+   "kind": "rect",
+   "x": 395,
+   "y": 320,
+   "width": 180,
+   "height": 60,
+   "label": "build",
+   "sublabel": "check + rebuild files",
+   "fill": "#fff7ed",
+   "stroke": "#f97316",
+   "flat": true
+  },
+  {
+   "id": "install",
+   "kind": "rect",
+   "x": 720,
+   "y": 320,
+   "width": 180,
+   "height": 60,
+   "label": "install",
+   "sublabel": "merge enabled mods",
+   "fill": "#fff7ed",
+   "stroke": "#f97316",
+   "flat": true
+  },
+  {
+   "id": "package",
+   "kind": "rect",
+   "x": 70,
+   "y": 490,
+   "width": 180,
+   "height": 60,
+   "label": "Model package",
+   "sublabel": "PNG textures, geometry",
+   "fill": "#ecfdf5",
+   "stroke": "#10b981",
+   "flat": true
+  },
+  {
+   "id": "blend",
+   "kind": "double_rect",
+   "x": 395,
+   "y": 490,
+   "width": 180,
+   "height": 60,
+   "label": ".blend",
+   "sublabel": "you edit here",
+   "fill": "#faf5ff",
+   "stroke": "#8b5cf6",
+   "flat": true
+  },
+  {
+   "id": "built",
+   "kind": "rect",
+   "x": 720,
+   "y": 490,
+   "width": 180,
+   "height": 60,
+   "label": "Mod build",
+   "sublabel": "models + textures",
+   "fill": "#ecfdf5",
+   "stroke": "#10b981",
+   "flat": true
+  }
+ ],
+ "arrows": [
+  {
+   "id": "read",
+   "source": "archives",
+   "target": "add",
+   "source_port": "bottom",
+   "target_port": "top",
+   "flow": "read",
+   "label": "read"
+  },
+  {
+   "id": "export",
+   "source": "add",
+   "target": "package",
+   "source_port": "bottom",
+   "target_port": "top",
+   "flow": "data",
+   "label": "export"
+  },
+  {
+   "id": "import",
+   "source": "package",
+   "target": "blend",
+   "source_port": "right",
+   "target_port": "left",
+   "flow": "data",
+   "label": "import"
+  },
+  {
+   "id": "edit",
+   "source": "blend",
+   "target": "build",
+   "source_port": "top",
+   "target_port": "bottom",
+   "flow": "control",
+   "label": "save + build"
+  },
+  {
+   "id": "write",
+   "source": "build",
+   "target": "built",
+   "source_port": "right",
+   "target_port": "left",
+   "flow": "write",
+   "label": "write"
+  },
+  {
+   "id": "merge",
+   "source": "built",
+   "target": "install",
+   "source_port": "top",
+   "target_port": "bottom",
+   "flow": "control",
+   "label": "enable"
+  },
+  {
+   "id": "install-patch",
+   "source": "install",
+   "target": "patch",
+   "source_port": "top",
+   "target_port": "bottom",
+   "flow": "write",
+   "label": "write"
+  },
+  {
+   "id": "load",
+   "source": "patch",
+   "target": "control",
+   "source_port": "left",
+   "target_port": "right",
+   "flow": "read",
+   "label": "load"
+  }
+ ],
+ "legend_orientation": "horizontal",
+ "legend_x": 48,
+ "legend_y": 615,
+ "legend_locked": true,
+ "legend": [
+  {
+   "flow": "read",
+   "label": "read game data"
+  },
+  {
+   "flow": "data",
+   "label": "model data"
+  },
+  {
+   "flow": "control",
+   "label": "you run"
+  },
+  {
+   "flow": "write",
+   "label": "writes files"
+  }
+ ],
+ "footer": "originals are never modified; uninstall removes only the patch archives control-mod wrote",
+ "footer_x": 48,
+ "footer_y": 665
+}

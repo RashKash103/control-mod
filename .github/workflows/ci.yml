@@ -23,8 +23,8 @@ jobs:
         os: [windows-latest, ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
       - name: Install
@@ -38,13 +38,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v7
       - name: Build sdist and wheel
         run: uv build
       - name: Check the Blender script is packaged
-        run: unzip -l dist/*.whl | grep control_mod/blender/ctl_blender.py
-      - uses: actions/upload-artifact@v4
+        run: unzip -l dist/*.whl | grep -E "control_mod/blender/(ctl_blender|control_mod_tools).py" | wc -l | grep -qx 2
+      - uses: actions/upload-artifact@v7
         with:
           name: dist
           path: dist/

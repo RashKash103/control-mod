@@ -453,7 +453,7 @@ def build_from_blender(
                 result.textures[apath] = texture.from_image(p, orig)
                 report.append(f"texture modified: {apath}")
             return apath
-        if not p.exists():
+        if not p.is_file():
             report.append(f"warning: image {p} not found, keeping original texture")
             return None
         # a brand new image: encode it like the texture it replaces

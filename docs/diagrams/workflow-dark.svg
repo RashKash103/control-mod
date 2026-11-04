@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 690" width="960" height="690" data-generator="fireworks-tech-graph" data-schema-version="1" data-text-metrics="heuristic-v1" data-style-id="2" data-visual-theme="Dark Terminal" data-diagram-type="architecture" data-motion-scene="" data-semantic-profile="generic" data-semantic-valid="true" data-quality-profile="standard" data-max-bends-per-edge="12" data-max-total-bends="100" data-max-route-stretch="5.0" data-max-bridged-crossings="8" data-min-node-gap="0.0" data-min-container-gutter="0.0" data-min-label-clearance="2.0" data-min-segment-length="0.0">
+  <defs>
+    <marker id="arrowA" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#a855f7"/>
+    </marker>
+    <marker id="arrowB" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#22c55e"/>
+    </marker>
+    <marker id="arrowC" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#38bdf8"/>
+    </marker>
+    <marker id="arrowE" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#fb7185"/>
+    </marker>
+    <marker id="arrowF" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#f59e0b"/>
+    </marker>
+    <marker id="arrowG" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#f97316"/>
+    </marker>
+    <marker id="arrowH" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#94a3b8"/>
+    </marker>
+    <linearGradient id="terminalGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f0f1a"/>
+      <stop offset="100%" stop-color="#1a1a2e"/>
+    </linearGradient>
+    <filter id="glowBlue" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#3b82f6" flood-opacity="0.65"/>
+    </filter>
+    <filter id="glowPurple" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#a855f7" flood-opacity="0.72"/>
+    </filter>
+    <filter id="glowGreen" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#22c55e" flood-opacity="0.62"/>
+    </filter>
+    <filter id="glowOrange" x="-30%" y="-30%" width="160%" height="160%">
+      <feDropShadow dx="0" dy="0" stdDeviation="5" flood-color="#f97316" flood-opacity="0.62"/>
+    </filter>
+    <style>
+    text { font-family: 'SF Mono', 'Fira Code', Menlo, 'Noto Sans CJK SC', 'Microsoft YaHei', 'SimHei', monospace; }
+    .title { font-size: 30px; font-weight: 700; fill: #e2e8f0; }
+    .subtitle { font-size: 14px; font-weight: 500; fill: #94a3b8; }
+    .section { font-size: 13px; font-weight: 700; fill: #38bdf8; letter-spacing: 1.4px; }
+    .section-sub { font-size: 12px; font-weight: 500; fill: #94a3b8; }
+    .node-title { font-weight: 700; fill: #e2e8f0; }
+    .node-sub { font-weight: 500; fill: #94a3b8; }
+    .node-type { font-size: 12px; font-weight: 700; fill: #94a3b8; letter-spacing: 0.08em; }
+    .arrow-label { font-size: 12px; font-weight: 600; fill: #cbd5e1; }
+    .legend { font-size: 12px; font-weight: 500; fill: #94a3b8; }
+    .footnote { font-size: 12px; font-weight: 500; fill: #94a3b8; }
+    .metric-label { font-size: 8.5px; font-weight: 700; fill: #94a3b8; text-transform: uppercase; }
+    .metric-value { font-size: 9.5px; font-weight: 700; fill: #e2e8f0; }
+    </style>
+  </defs>
+  <rect data-graph-role="background" width="960.0" height="690.0" fill="url(#terminalGradient)"/>
+  <text x="480.0" y="56" text-anchor="middle" class="title">control-mod workflow</text>
+  <text x="480.0" y="82" text-anchor="middle" class="subtitle">game archives to Blender and back, installed as removable patch archives</text>
+  <g id="game" data-graph-role="container" data-container-id="game" data-semantic-role="boundary" data-graph-bounds="40,110,920,240">
+  <rect data-graph-role="container" x="40.0" y="110.0" width="880.0" height="130.0" rx="16.0" fill="rgba(15,23,42,0.28)" stroke="#334155" stroke-width="1.4" stroke-dasharray="7 6"/>
+  <text x="58.0" y="134.0" class="section">GAME</text>
+    <rect id="game-header" data-graph-role="reserved" data-reserved-kind="container-header" x="48" y="116" width="63.28" height="30" fill="none" stroke="none"/>
+  </g>
+  <g id="cli" data-graph-role="container" data-container-id="cli" data-semantic-role="boundary" data-graph-bounds="40,280,920,410">
+  <rect data-graph-role="container" x="40.0" y="280.0" width="880.0" height="130.0" rx="16.0" fill="rgba(15,23,42,0.28)" stroke="#334155" stroke-width="1.4" stroke-dasharray="7 6"/>
+  <text x="58.0" y="304.0" class="section">CLI</text>
+    <rect id="cli-header" data-graph-role="reserved" data-reserved-kind="container-header" x="48" y="286" width="49.5" height="30" fill="none" stroke="none"/>
+  </g>
+  <g id="mod" data-graph-role="container" data-container-id="mod" data-semantic-role="boundary" data-graph-bounds="40,450,920,580">
+  <rect data-graph-role="container" x="40.0" y="450.0" width="880.0" height="130.0" rx="16.0" fill="rgba(15,23,42,0.28)" stroke="#334155" stroke-width="1.4" stroke-dasharray="7 6"/>
+  <text x="58.0" y="474.0" class="section">MOD</text>
+    <rect id="mod-header" data-graph-role="reserved" data-reserved-kind="container-header" x="48" y="456" width="55.74" height="30" fill="none" stroke="none"/>
+  </g>
+  <path id="read" data-graph-role="edge" data-edge-id="read" data-source="archives" data-target="add" data-edge-kind="flow" data-topic-id="" data-flow="read" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 160,210 L 160,320" fill="none" stroke="#38bdf8" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowC)"/>
+  <path id="export" data-graph-role="edge" data-edge-id="export" data-source="add" data-target="package" data-edge-kind="flow" data-topic-id="" data-flow="data" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 160,380 L 160,490" fill="none" stroke="#fb7185" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowE)"/>
+  <path id="import" data-graph-role="edge" data-edge-id="import" data-source="package" data-target="blend" data-edge-kind="flow" data-topic-id="" data-flow="data" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 250,520 L 395,520" fill="none" stroke="#fb7185" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowE)"/>
+  <path id="edit" data-graph-role="edge" data-edge-id="edit" data-source="blend" data-target="build" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 485,490 L 485,380" fill="none" stroke="#a855f7" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)"/>
+  <path id="write" data-graph-role="edge" data-edge-id="write" data-source="build" data-target="built" data-edge-kind="flow" data-topic-id="" data-flow="write" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="2" data-route-stretch="1.0" data-bridges="" d="M 575,350 L 599,350 L 599,520 L 720,520" fill="none" stroke="#22c55e" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowB)"/>
+  <path id="merge" data-graph-role="edge" data-edge-id="merge" data-source="built" data-target="install" data-edge-kind="flow" data-topic-id="" data-flow="control" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 810,490 L 810,380" fill="none" stroke="#a855f7" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowA)"/>
+  <path id="install-patch" data-graph-role="edge" data-edge-id="install-patch" data-source="install" data-target="patch" data-edge-kind="flow" data-topic-id="" data-flow="write" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 810,320 L 810,210" fill="none" stroke="#22c55e" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowB)"/>
+  <path id="load" data-graph-role="edge" data-edge-id="load" data-source="patch" data-target="control" data-edge-kind="flow" data-topic-id="" data-flow="read" data-motion-role="" data-motion-stage="" data-motion-order="" data-protocol="" data-via="" data-critical-path-id="" data-critical-hop="" data-critical-hops="" data-critical="false" data-bends="0" data-route-stretch="1.0" data-bridges="" d="M 720,180 L 575,180" fill="none" stroke="#38bdf8" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrowC)"/>
+  <g id="node-archives" data-graph-role="node" data-node-id="archives" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="70,150,250,210">
+  <rect x="70.0" y="150.0" width="180.0" height="60.0" rx="10.0" fill="#0f172a" stroke="#38bdf8" stroke-width="1.8"/>
+  <text data-text-role="title" data-full-text="Game archives" data-text-max-width="156.0" x="160.0" y="180.0" text-anchor="middle" class="node-title" font-size="18">Game archives</text>
+  <text data-text-role="subtitle" data-full-text=".bin/.rmdp + .packmeta" data-text-max-width="156.0" x="160.0" y="202.0" text-anchor="middle" class="node-sub" font-size="12">.bin/.rmdp + .packmeta</text>
+  </g>
+  <g id="node-control" data-graph-role="node" data-node-id="control" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="395,150,575,210">
+  <rect x="395.0" y="150.0" width="180.0" height="60.0" rx="10.0" fill="#0f172a" stroke="#38bdf8" stroke-width="1.8"/>
+  <text data-text-role="title" data-full-text="Control" data-text-max-width="156.0" x="485.0" y="180.0" text-anchor="middle" class="node-title" font-size="18">Control</text>
+  <text data-text-role="subtitle" data-full-text="patches override originals" data-text-max-width="156.0" x="485.0" y="202.0" text-anchor="middle" class="node-sub" font-size="10.62">patches override originals</text>
+  </g>
+  <g id="node-patch" data-graph-role="node" data-node-id="patch" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="720,150,900,210">
+  <rect x="720.0" y="150.0" width="180.0" height="60.0" rx="10.0" fill="#0f172a" stroke="#38bdf8" stroke-width="1.8"/>
+  <text data-text-role="title" data-full-text="Patch archives" data-text-max-width="156.0" x="810.0" y="180.0" text-anchor="middle" class="node-title" font-size="18">Patch archives</text>
+  <text data-text-role="subtitle" data-full-text="ep100-001-* + .packmeta" data-text-max-width="156.0" x="810.0" y="202.0" text-anchor="middle" class="node-sub" font-size="11.42">ep100-001-* + .packmeta</text>
+  </g>
+  <g id="node-add" data-graph-role="node" data-node-id="add" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="70,320,250,380">
+  <rect x="70.0" y="320.0" width="180.0" height="60.0" rx="10.0" fill="#111827" stroke="#f97316" stroke-width="1.8"/>
+  <text data-text-role="title" data-full-text="add" data-text-max-width="156.0" x="160.0" y="350.0" text-anchor="middle" class="node-title" font-size="18">add</text>
+  <text data-text-role="subtitle" data-full-text="export model + textures" data-text-max-width="156.0" x="160.0" y="372.0" text-anchor="middle" class="node-sub" font-size="11.62">export model + textures</text>
+  </g>
+  <g id="node-build" data-graph-role="node" data-node-id="build" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="395,320,575,380">
+  <rect x="395.0" y="320.0" width="180.0" height="60.0" rx="10.0" fill="#111827" stroke="#f97316" stroke-width="1.8"/>
+  <text data-text-role="title" data-full-text="build" data-text-max-width="156.0" x="485.0" y="350.0" text-anchor="middle" class="node-title" font-size="18">build</text>
+  <text data-text-role="subtitle" data-full-text="check + rebuild files" data-text-max-width="156.0" x="485.0" y="372.0" text-anchor="middle" class="node-sub" font-size="12">check + rebuild files</text>
+  </g>
+  <g id="node-install" data-graph-role="node" data-node-id="install" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="720,320,900,380">
+  <rect x="720.0" y="320.0" width="180.0" height="60.0" rx="10.0" fill="#111827" stroke="#f97316" stroke-width="1.8"/>
+  <text data-text-role="title" data-full-text="install" data-text-max-width="156.0" x="810.0" y="350.0" text-anchor="middle" class="node-title" font-size="18">install</text>
+  <text data-text-role="subtitle" data-full-text="merge enabled mods" data-text-max-width="156.0" x="810.0" y="372.0" text-anchor="middle" class="node-sub" font-size="12">merge enabled mods</text>
+  </g>
+  <g id="node-package" data-graph-role="node" data-node-id="package" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="70,490,250,550">
+  <rect x="70.0" y="490.0" width="180.0" height="60.0" rx="10.0" fill="#0f172a" stroke="#34d399" stroke-width="1.8"/>
+  <text data-text-role="title" data-full-text="Model package" data-text-max-width="156.0" x="160.0" y="520.0" text-anchor="middle" class="node-title" font-size="18">Model package</text>
+  <text data-text-role="subtitle" data-full-text="PNG textures, geometry" data-text-max-width="156.0" x="160.0" y="542.0" text-anchor="middle" class="node-sub" font-size="11.97">PNG textures, geometry</text>
+  </g>
+  <g id="node-blend" data-graph-role="node" data-node-id="blend" data-semantic-role="double_rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="395,490,575,550">
+  <rect x="395.0" y="490.0" width="180.0" height="60.0" rx="10.0" fill="#111827" stroke="#a855f7" stroke-width="2.0"/>
+  <rect x="401.0" y="496.0" width="168.0" height="48.0" rx="7.0" fill="none" stroke="#a855f7" stroke-width="1.2" opacity="0.65"/>
+  <text data-text-role="title" data-full-text=".blend" data-text-max-width="148.0" x="485.0" y="520.0" text-anchor="middle" class="node-title" font-size="18">.blend</text>
+  <text data-text-role="subtitle" data-full-text="you edit here" data-text-max-width="148.0" x="485.0" y="542.0" text-anchor="middle" class="node-sub" font-size="12">you edit here</text>
+  </g>
+  <g id="node-built" data-graph-role="node" data-node-id="built" data-semantic-role="rect" data-motion-role="" data-motion-stage="" data-motion-order="" data-parent="" data-deployment-id="" data-topic-id="" data-span-id="" data-station-order="" data-status="" data-start-ms="" data-duration-ms="" data-parent-span="" data-graph-bounds="720,490,900,550">
+  <rect x="720.0" y="490.0" width="180.0" height="60.0" rx="10.0" fill="#0f172a" stroke="#34d399" stroke-width="1.8"/>
+  <text data-text-role="title" data-full-text="Mod build" data-text-max-width="156.0" x="810.0" y="520.0" text-anchor="middle" class="node-title" font-size="18">Mod build</text>
+  <text data-text-role="subtitle" data-full-text="models + textures" data-text-max-width="156.0" x="810.0" y="542.0" text-anchor="middle" class="node-sub" font-size="12">models + textures</text>
+  </g>
+  <g id="read-label" data-graph-role="label" data-owner="read" data-graph-bounds="115.16,251,157,271">
+  <rect x="115.16" y="251.0" width="41.839999999999996" height="20" rx="6" fill="#0f172a" opacity="0.92"/>
+  <text x="136.08" y="265.0" text-anchor="middle" class="arrow-label">read</text>
+  </g>
+  <g id="export-label" data-graph-role="label" data-owner="export" data-graph-bounds="101.24,421,157,441">
+  <rect x="101.24" y="421.0" width="55.76" height="20" rx="6" fill="#0f172a" opacity="0.92"/>
+  <text x="129.12" y="435.0" text-anchor="middle" class="arrow-label">export</text>
+  </g>
+  <g id="import-label" data-graph-role="label" data-owner="import" data-graph-bounds="296.18,489,348.82,509">
+  <rect x="296.18" y="489.0" width="52.64" height="20" rx="6" fill="#0f172a" opacity="0.92"/>
+  <text x="322.5" y="503.0" text-anchor="middle" class="arrow-label">import</text>
+  </g>
+  <g id="edit-label" data-graph-role="label" data-owner="edit" data-graph-bounds="396,421,482,441">
+  <rect x="396.0" y="421.0" width="86.0" height="20" rx="6" fill="#0f172a" opacity="0.92"/>
+  <text x="439.0" y="435.0" text-anchor="middle" class="arrow-label">save + build</text>
+  </g>
+  <g id="write-label" data-graph-role="label" data-owner="write" data-graph-bounds="550.32,421,596,441">
+  <rect x="550.32" y="421.0" width="45.68" height="20" rx="6" fill="#0f172a" opacity="0.92"/>
+  <text x="573.16" y="435.0" text-anchor="middle" class="arrow-label">write</text>
+  </g>
+  <g id="merge-label" data-graph-role="label" data-owner="merge" data-graph-bounds="754.36,421,807,441">
+  <rect x="754.36" y="421.0" width="52.64" height="20" rx="6" fill="#0f172a" opacity="0.92"/>
+  <text x="780.68" y="435.0" text-anchor="middle" class="arrow-label">enable</text>
+  </g>
+  <g id="install-patch-label" data-graph-role="label" data-owner="install-patch" data-graph-bounds="761.32,251,807,271">
+  <rect x="761.32" y="251.0" width="45.68" height="20" rx="6" fill="#0f172a" opacity="0.92"/>
+  <text x="784.16" y="265.0" text-anchor="middle" class="arrow-label">write</text>
+  </g>
+  <g id="load-label" data-graph-role="label" data-owner="load" data-graph-bounds="628.14,149,666.86,169">
+  <rect x="628.14" y="149.0" width="38.72" height="20" rx="6" fill="#0f172a" opacity="0.92"/>
+  <text x="647.5" y="163.0" text-anchor="middle" class="arrow-label">load</text>
+  </g>
+  <g id="legend" data-graph-role="legend">
+    <rect id="legend-zone" data-graph-role="reserved" data-reserved-kind="legend" x="38" y="601" width="547.6" height="46" rx="10" fill="none" stroke="none"/>
+    <line data-graph-role="decoration" x1="48.0" y1="615.0" x2="78.0" y2="615.0" stroke="#38bdf8" stroke-width="2.3" marker-end="url(#arrowC)"/>
+    <text data-graph-role="decoration" x="88.0" y="619.0" class="legend">read game data</text>
+    <line data-graph-role="decoration" x1="208.16000000000003" y1="615.0" x2="238.16000000000003" y2="615.0" stroke="#fb7185" stroke-width="2.3" marker-end="url(#arrowE)"/>
+    <text data-graph-role="decoration" x="248.16000000000003" y="619.0" class="legend">model data</text>
+    <line data-graph-role="decoration" x1="340.0" y1="615.0" x2="370.0" y2="615.0" stroke="#a855f7" stroke-width="2.3" marker-end="url(#arrowA)"/>
+    <text data-graph-role="decoration" x="380.0" y="619.0" class="legend">you run</text>
+    <line data-graph-role="decoration" x1="454.08" y1="615.0" x2="484.08" y2="615.0" stroke="#22c55e" stroke-width="2.3" marker-end="url(#arrowB)"/>
+    <text data-graph-role="decoration" x="494.08" y="619.0" class="legend">writes files</text>
+  </g>
+  <g id="footer" data-graph-role="reserved" data-graph-bounds="48,653,671,669">
+  <text x="48.0" y="665.0" class="footnote">originals are never modified; uninstall removes only the patch archives control-mod wrote</text>
+  </g>
+</svg>
