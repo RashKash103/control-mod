@@ -1,10 +1,11 @@
 [project]
-name = "ctlmod"
+name = "control-mod"
 version = "0.1.0"
 description = "Control: Ultimate Edition outfit and model modding toolkit (Blender workflow + mod manager)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "cityhash>=0.4.10",
     "etcpak>=0.9.15",
     "numpy>=2.5.4",
     "pillow>=13.0.0",
@@ -16,7 +17,7 @@ requires = ["uv_build>=0.13.7,<0.14.0"]
 build-backend = "uv_build"
 
 [project.scripts]
-ctlmod = "ctlmod.cli:main"
+control-mod = "control_mod.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

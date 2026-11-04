@@ -10,8 +10,8 @@ mods/*/renders/
 mods/*/.preview/
 mods/*/models/*/blender_export/
 *.blend1
-.ctlmod/
-# extracted game assets (large, copyrighted) - recreate with `ctlmod add`
+.control-mod/
+# extracted game assets (large, copyrighted) - recreate with `control-mod add`
 mods/*/models/
-# machine-specific paths - recreate with `ctlmod setup`
-ctlmod.toml
+# machine-specific paths - recreate with `control-mod setup`
+control-mod.toml

@@ -252,7 +252,9 @@ def _placeholder(o: Submesh) -> Submesh:
     return p
 
 
-def conform(template: BinFbx, subs: list[Submesh], materials: list[Material] | None = None) -> tuple[list[Submesh], list[str]]:
+def conform(
+    template: BinFbx, subs: list[Submesh], materials: list[Material] | None = None, allow_new_meshes: bool = False
+) -> tuple[list[Submesh], list[str]]:
     """Map edited geometry onto the template's exact mesh slots.
 
     The game's renderer (its ray-tracing setup, at least) expects each LOD to keep the
@@ -261,6 +263,9 @@ def conform(template: BinFbx, subs: list[Submesh], materials: list[Material] | N
     * a slot whose mesh came back keeps it;
     * new geometry is merged into the first slot of the same LOD with the same material;
     * a slot whose mesh was deleted gets an invisible placeholder.
+
+    With ``allow_new_meshes`` (builds that ship their own metadata), geometry whose
+    material has no slot in its LOD becomes an extra mesh instead of an error.
     """
     from .geometry import decode
 
@@ -274,11 +279,15 @@ def conform(template: BinFbx, subs: list[Submesh], materials: list[Material] | N
         else:
             extra.append(s)
     merged_into: dict[int, list[Submesh]] = {}
+    appended: list[Submesh] = []
     keep_original_lods: set[int] = set()
     authored_lods = {template.meshes[i].lod for i in by_slot}
     for s in extra:
         slot = next((i for i, m in enumerate(template.meshes) if m.lod == s.lod and template.mesh_material[i] == s.material), None)
         if slot is None:
+            if allow_new_meshes and (s.lod in authored_lods or s.material >= len(template.materials)):
+                appended.append(s)
+                continue
             if s.lod not in authored_lods:
                 # a LOD made entirely of generated geometry (--lods copy/decimate) whose
                 # original uses different materials, e.g. a baked far-distance LOD
@@ -314,6 +323,15 @@ def conform(template: BinFbx, subs: list[Submesh], materials: list[Material] | N
         base.lod = m.lod
         base.layout = list(m.attrs)
         out.append(base)
+    layouts = {}
+    for m in template.meshes:
+        layouts.setdefault(m.lod, m.attrs)
+    for s in appended:
+        s = copy.copy(s)
+        s.source_index = -1
+        s.layout = list(layouts.get(s.lod, layouts[min(layouts)]))
+        out.append(s)
+        notes.append(f"new LOD{s.lod} mesh with material '{materials[s.material].name.text}'")
     return out, notes
 
 

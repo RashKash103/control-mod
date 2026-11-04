@@ -11,7 +11,8 @@ from pathlib import Path
 
 from .archive import MARKER_OFFSET, Archive, FileEntry, normalize
 
-CTLMOD_MARKER = b"ctlmod\0\0"  # stored in the unused part of the header of archives we create
+CONTROL_MOD_MARKER = b"ctrl-mod"  # stored in the unused part of the header of archives we create
+LEGACY_MARKERS = (b"ctlmod\0\0",)  # written by earlier versions (when the tool was called ctlmod)
 _NAME_RE = re.compile(r"^(?P<ep>[a-z]+\d+)-(?P<patch>\d{3})-(?P<rest>.+)$", re.I)
 
 DEFAULT_GAME_DIRS = [
@@ -34,12 +35,13 @@ def patch_name(base_stem: str, number: int) -> str:
     return f"{ep}-{number:03d}-{rest}"
 
 
-def is_ctlmod_archive(bin_path: Path) -> bool:
+def is_control_mod_archive(bin_path: Path) -> bool:
     try:
         with open(bin_path, "rb") as f:
             head = f.read(153)
-        # current location, and the header prefix used by ctlmod <= 0.1 (still uninstallable)
-        return head[25 + MARKER_OFFSET : 33 + MARKER_OFFSET] == CTLMOD_MARKER or head[25:33] == CTLMOD_MARKER
+        # current location, and the header prefix used by the first version (still uninstallable)
+        markers = (CONTROL_MOD_MARKER, *LEGACY_MARKERS)
+        return head[25 + MARKER_OFFSET : 33 + MARKER_OFFSET] in markers or head[25:33] in markers
     except OSError:
         return False
 
@@ -63,10 +65,10 @@ class GameData:
 
     @cached_property
     def archives(self) -> list[Archive]:
-        """Original (non-ctlmod) archives, lowest patch number first."""
+        """Original (non-control-mod) archives, lowest patch number first."""
         out = []
         for b in sorted(self.pack_dir.glob("*.bin")):
-            if not b.with_suffix(".rmdp").exists() or is_ctlmod_archive(b):
+            if not b.with_suffix(".rmdp").exists() or is_control_mod_archive(b):
                 continue
             if split_archive_name(b.stem) is None:
                 continue
@@ -120,7 +122,7 @@ class GameData:
 
 
 def find_game_dir() -> Path | None:
-    env = os.environ.get("CTLMOD_GAME_DIR")
+    env = os.environ.get("CONTROL_MOD_GAME_DIR")
     for c in ([env] if env else []) + DEFAULT_GAME_DIRS:
         if c and (Path(c) / "data_packfiles").is_dir():
             return Path(c)

@@ -380,6 +380,7 @@ class BuildResult:
     binfbx: bytes
     textures: dict[str, bytes] = field(default_factory=dict)  # archive path -> .tex bytes
     report: list[str] = field(default_factory=list)
+    derived: dict[str, str] = field(default_factory=dict)  # new texture -> texture it was encoded like
 
 
 def _load_blender_dump(dump_dir: Path) -> tuple[dict, dict[str, np.ndarray]]:
@@ -393,9 +394,10 @@ def build_from_blender(
     pkg_dir: str | Path,
     dump_dir: str | Path | None = None,
     read_texture: TextureReader | None = None,
-    new_texture_root: str = "data_pc/textures/ctlmod",
+    new_texture_root: str = "data_pc/textures/control-mod",
     log: Callable[[str], None] = print,
     strict: bool = True,
+    size_budget: bool = True,
 ) -> BuildResult:
     """Rebuild the ``.binfbx`` (and any edited/new textures) from a Blender dump.
 
@@ -404,6 +406,8 @@ def build_from_blender(
     existing materials, and textures repainted in place at their original resolution.
     Anything else raises :class:`BuildError` listing every problem. ``strict=False``
     allows new materials/textures and larger models for experiments.
+    ``size_budget=False`` keeps the strict rules except the size budget, for builds
+    whose new sizes are described by a generated ``.packmeta`` (see control_mod.packmeta).
     """
     pkg = Path(pkg_dir)
     dump = Path(dump_dir) if dump_dir else pkg / "blender_export"
@@ -453,19 +457,33 @@ def build_from_blender(
             report.append(f"warning: image {p} not found, keeping original texture")
             return None
         # a brand new image: encode it like the texture it replaces
-        if strict:
+        if strict and size_budget:
             problems.append(
                 f"new image {p.name} is used in a material: {WHY_NEW_FILES}. Instead paint over the "
-                f"original texture (its PNG in textures/), keeping its resolution."
+                f"original texture (its PNG in textures/), keeping its resolution - or build without --size-matched."
             )
             return like_apath
         like = read_texture(like_apath) if (read_texture and like_apath) else None
         if like is None:
             raise ValueError(f"new image {p.name} has no texture slot to take its format from")
+        if strict:
+            # its metadata is cloned from the texture it replaces, so the size must match
+            from PIL import Image
+
+            info = texture.read_info(like)
+            with Image.open(p) as im:
+                size = im.size
+            if size != (info.width, info.height):
+                problems.append(
+                    f"new image {p.name} is {size[0]}x{size[1]}; new textures must have the resolution of the "
+                    f"texture they replace ({Path(like_apath).name}: {info.width}x{info.height})."
+                )
+                return like_apath
         stem = _safe(p.stem).lower()
         apath = f"{new_texture_root}/{meta['name']}/{stem}{Path(like_apath).suffix}"
         if apath not in result.textures:
             result.textures[apath] = texture.from_image(p, like)
+            result.derived[apath] = like_apath
             report.append(f"texture added: {apath} (from {p.name})")
         return apath
 
@@ -493,18 +511,18 @@ def build_from_blender(
             if apath and apath != orig_apath:
                 changed[param] = apath
         renamed = not original
-        if strict and changed:
+        if strict and size_budget and changed:
             for param, apath in changed.items():
                 problems.append(
                     f"material '{bm['name']}': {param} was switched to {Path(apath).name}, but "
                     f"{WHY_TEXTURE_BINDING}. To change the look, edit the original texture "
-                    f"({Path(meta_mat['textures'].get(param, '?')).stem}.png) in place."
+                    f"({Path(meta_mat['textures'].get(param, '?')).stem}.png) in place - or build without --size-matched."
                 )
             changed = {}
-        if strict and renamed:
+        if strict and size_budget and renamed:
             problems.append(
-                f"material '{bm['name']}' is a new copy of '{base}': new materials are not supported "
-                f"({WHY_TEXTURE_BINDING}). Assign an existing material to those faces instead."
+                f"material '{bm['name']}' is a new copy of '{base}': new materials need metadata "
+                f"({WHY_TEXTURE_BINDING}). Assign an existing material instead, or build without --size-matched."
             )
             mat_index[bm["name"]] = idx
             continue
@@ -613,13 +631,21 @@ def build_from_blender(
             f"{len(problems)} change(s) in {meta['name']} cannot work in the game:\n  - " + "\n  - ".join(problems)
             + "\n(Use --experimental to build anyway, e.g. for testing.)"
         )
-    if strict:
+    if strict and size_budget:
         budget = len((pkg / "template.binfbx").read_bytes())
         try:
             out, notes = model.fit_to_size(template, subs, out_materials, budget)
         except (model.SizeBudgetError, model.SlotError) as e:
             raise BuildError(f"{meta['name']}: {e}") from None
         report.extend(notes)
+    elif strict:
+        # sizes will be described by a generated .packmeta: keep the mesh slots only
+        try:
+            subs, notes = model.conform(template, subs, out_materials, allow_new_meshes=True)
+        except model.SlotError as e:
+            raise BuildError(f"{meta['name']}: {e}") from None
+        report.extend(notes)
+        out = model.rebuild(template, subs, out_materials)
     else:
         out = model.rebuild(template, subs, out_materials)
     result.binfbx = out.to_bytes()

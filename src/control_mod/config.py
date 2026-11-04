@@ -1,4 +1,4 @@
-"""Workspace configuration (``ctlmod.toml``) and mod-manager state (``.ctlmod/state.json``)."""
+"""Workspace configuration (``control-mod.toml``) and mod-manager state (``.control-mod/state.json``)."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-CONFIG_NAME = "ctlmod.toml"
+CONFIG_NAME = "control-mod.toml"
 DEFAULT_BLENDER_GLOBS = [
     r"C:\Program Files\Blender Foundation\Blender*\blender.exe",
     r"C:\Program Files (x86)\Steam\steamapps\common\Blender\blender.exe",
@@ -17,9 +17,9 @@ DEFAULT_BLENDER_GLOBS = [
 
 
 def find_workspace(start: Path | None = None) -> Path:
-    """Nearest folder (from ``start`` upwards) containing ``ctlmod.toml``, else ``start``."""
+    """Nearest folder (from ``start`` upwards) containing ``control-mod.toml``, else ``start``."""
     start = (start or Path.cwd()).resolve()
-    env = os.environ.get("CTLMOD_WORKSPACE")
+    env = os.environ.get("CONTROL_MOD_WORKSPACE")
     if env:
         return Path(env).resolve()
     for p in [start, *start.parents]:
@@ -29,7 +29,7 @@ def find_workspace(start: Path | None = None) -> Path:
 
 
 def find_blender() -> Path | None:
-    env = os.environ.get("CTLMOD_BLENDER")
+    env = os.environ.get("CONTROL_MOD_BLENDER")
     if env and Path(env).exists():
         return Path(env)
     which = shutil.which("blender")
@@ -87,7 +87,7 @@ class Config:
 
     @property
     def state_dir(self) -> Path:
-        return self.workspace / ".ctlmod"
+        return self.workspace / ".control-mod"
 
     @classmethod
     def load(cls, workspace: Path | None = None) -> "Config":
@@ -109,20 +109,20 @@ class Config:
             "blender": str(self.blender or ""),
             "patch_number": self.patch_number,
         }
-        write_toml(self.workspace / CONFIG_NAME, data, "# ctlmod workspace configuration")
+        write_toml(self.workspace / CONFIG_NAME, data, "# control-mod workspace configuration")
 
     def require_game(self) -> Path:
         from .gamedata import find_game_dir
 
         g = self.game_dir or find_game_dir()
         if not g or not (Path(g) / "data_packfiles").is_dir():
-            raise SystemExit("Game directory not configured. Run: ctlmod setup --game <path to Control>")
+            raise SystemExit("Game directory not configured. Run: control-mod setup --game <path to Control>")
         return Path(g)
 
     def require_blender(self) -> Path:
         b = self.blender or find_blender()
         if not b or not Path(b).exists():
-            raise SystemExit("Blender not found. Run: ctlmod setup --blender <path to blender.exe>")
+            raise SystemExit("Blender not found. Run: control-mod setup --blender <path to blender.exe>")
         return Path(b)
 
 

@@ -1,9 +1,10 @@
-# ctlmod — outfit & model modding for Control: Ultimate Edition
+# control-mod — outfit & model modding for Control: Ultimate Edition
 
-`ctlmod` lets you take any character model out of Control, edit it in Blender
-(reshape and remodel meshes, add new pieces, re-weight, repaint textures), turn it back
-into game files, and install it with a small mod manager that can switch individual
-outfit mods on and off without touching the original game files.
+`control-mod` lets you take any character model out of Control, edit it in Blender
+(reshape and remodel meshes, add new pieces, re-weight, repaint textures, add new
+materials and textures), turn it back into game files, and install it with a small mod
+manager that can switch individual outfit mods on and off without touching the
+original game files.
 
 ```
 game archives ──export──▶ model package ──import──▶ .blend  (you edit here)
@@ -12,34 +13,37 @@ game ◀──install── patch archives ◀──compose── mod build ◀�
 ```
 
 * Works for **any** model: everything is discovered by reading the game's archives —
-  nothing is hard-coded per character. `ctlmod find --characters` lists 180+
+  nothing is hard-coded per character. `control-mod find --characters` lists 180+
   character models (Jesse's 12 outfits, NPCs, enemies…).
 * Original game files are never modified. Mods are installed as extra *patch archives*
-  (`ep100-001-generic.bin/.rmdp`, …) that ctlmod tags and can remove at any time.
+  (`ep100-001-generic.bin/.rmdp/.packmeta`, …) that control-mod tags and can remove at any
+  time; the generated `.packmeta` metadata tells the game about the changed files.
 * All file formats were reverse engineered and are verified against **all 6,707
-  models** in the game (byte-exact parse/re-serialise, `ctlmod selftest`).
+  models** in the game (byte-exact parse/re-serialise, `control-mod selftest`).
 * It tells you when an edit reaches beyond your mod: textures shared with other
   models are flagged in Blender, in build reports and at install time.
 
 ## What the game accepts
 
-Confirmed by in-game tests (November 2026, Steam version):
+Confirmed by in-game tests (November 2026, Steam version, ray tracing on):
 
-| change | works? | how ctlmod handles it |
+| change | works? | notes |
 |---|---|---|
-| Repaint / recolour an existing texture, same resolution | ✅ | edit its PNG; the build re-encodes it in the original format |
-| Reshape, remodel, delete geometry; re-weight | ✅ | as long as the total geometry fits the original's buffers |
-| Add new parts using the model's existing materials | ✅ (the [example mod](#6-example-mod-and-in-game-check)'s halo) | merged into the matching mesh; LOD1 is simplified automatically to make room |
-| Model or its vertex/index buffers larger than the original | ❌ crashes | the build pads every model to exactly the original sizes and refuses bigger ones |
-| Different number of meshes per LOD | ❌ crashes (with ray tracing on) | the build keeps the original mesh slots |
-| Change which texture a material uses / new materials | ❌ ignored by the game | refused at build time with an explanation |
-| Brand-new texture files, changed texture resolution | ❌ | refused at build time with an explanation |
+| Repaint / recolour an existing texture | ✅ | keep its resolution; the build re-encodes it in the original format |
+| Reshape, remodel, delete geometry; re-weight | ✅ | |
+| Models larger than the original | ✅ | the generated metadata describes the new sizes |
+| Add new parts using existing materials | ✅ | merged into the mesh that already uses that material |
+| New materials (copies of existing ones) and extra meshes | ✅ | e.g. the [example mod](#6-example-mod-and-in-game-check)'s gold halo |
+| Point a material at a different or brand-new texture | ✅ | a new texture must have the resolution of the texture it replaces |
+| Change a texture's resolution | ❌ | refused at build time (its metadata describes the original size) |
 
-The reason for the limits: each game archive has a `.packmeta` metadata file that
-records every file's size and how textures are bound to materials, and the game trusts
-it over the files themselves. ctlmod cannot write that metadata yet (see
-[docs/FORMATS.md](docs/FORMATS.md)), so it keeps every change consistent with the
-original metadata. `ctlmod build --experimental` lifts the checks for experiments.
+How it works: next to every game archive is a `.packmeta` file with metadata the game
+trusts over the files themselves — file sizes, vertex/index buffer sizes, bounding boxes,
+each model's list of textures, texture layouts. control-mod writes that metadata for every
+patch archive (`.packmeta` next to the patch), describing the modified and new files
+(details in [docs/FORMATS.md](docs/FORMATS.md)). `control-mod build --size-matched` is a
+fallback that needs no metadata: it keeps every file at its original size and allows
+only in-place texture edits and geometry that fits.
 
 ---
 
@@ -70,18 +74,18 @@ uv sync
 ```
 
 ```bash
-uv run ctlmod setup
+uv run control-mod setup
 ```
 
-`setup` auto-detects the game and Blender and writes `ctlmod.toml`. If detection
+`setup` auto-detects the game and Blender and writes `control-mod.toml`. If detection
 fails, pass the paths explicitly:
 
 ```bash
-uv run ctlmod setup --game "C:\Program Files (x86)\Steam\steamapps\common\Control" --blender "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
+uv run control-mod setup --game "C:\Program Files (x86)\Steam\steamapps\common\Control" --blender "C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
 ```
 
-All commands below are run from this folder as `uv run ctlmod …` (shortened to
-`ctlmod …` in the rest of this document). The first `add` or `build` also indexes which
+All commands below are run from this folder as `uv run control-mod …` (shortened to
+`control-mod …` in the rest of this document). The first `add` or `build` also indexes which
 models use which textures (about 30 seconds, cached until the game updates).
 
 ---
@@ -91,43 +95,43 @@ models use which textures (about 30 seconds, cached until the game updates).
 A mod that changes Jesse's default **Bureau Casual** outfit (`jesse_civilian`):
 
 ```bash
-uv run ctlmod backup-saves
+uv run control-mod backup-saves
 ```
 
 ```bash
-uv run ctlmod find jesse --characters
+uv run control-mod find jesse --characters
 ```
 
 ```bash
-uv run ctlmod new my_casual --name "My casual outfit" --author "me"
+uv run control-mod new my_casual --name "My casual outfit" --author "me"
 ```
 
 ```bash
-uv run ctlmod add my_casual jesse_civilian_publish_physx
+uv run control-mod add my_casual jesse_civilian_publish_physx
 ```
 
 ```bash
-uv run ctlmod open my_casual
+uv run control-mod open my_casual
 ```
 
 Edit in Blender, **save** (Ctrl+S), close Blender, then:
 
 ```bash
-uv run ctlmod build my_casual
+uv run control-mod build my_casual
 ```
 
 ```bash
-uv run ctlmod render my_casual --built
+uv run control-mod render my_casual --built
 ```
 
 ```bash
-uv run ctlmod install
+uv run control-mod install
 ```
 
 Start the game and wear the outfit. To go back to the vanilla game at any time:
 
 ```bash
-uv run ctlmod uninstall
+uv run control-mod uninstall
 ```
 
 ---
@@ -137,15 +141,15 @@ uv run ctlmod uninstall
 ### 3.1 Find the model
 
 ```bash
-uv run ctlmod find jesse --characters
+uv run control-mod find jesse --characters
 ```
 
 ```bash
-uv run ctlmod info jesse_civilian_publish_physx --textures
+uv run control-mod info jesse_civilian_publish_physx --textures
 ```
 
 ```bash
-uv run ctlmod usage jesse_civilian_publish_physx --model
+uv run control-mod usage jesse_civilian_publish_physx --model
 ```
 
 `find` accepts substrings or globs (`*civilian*`). `info` shows every mesh (per LOD),
@@ -160,16 +164,16 @@ Jesse's outfits are `data/objects/characters/intermediate/jesse_<outfit>_publish
 | `jesse_suit`, `jesse_suit_gold` | formal suits |
 | `jesse_assistant`, `jesse_janitor`, `jesse_jumpsuit`, `jesse_tactical`, `jesse_urban`, `jesse_master`, `jesse_hedron`, `jesse_expedition`, `jesse_superhero` | other unlockable / DLC outfits |
 
-(These are the game's internal names; `ctlmod render` shows what each looks like.)
+(These are the game's internal names; `control-mod render` shows what each looks like.)
 
 ### 3.2 Create a mod and add models
 
 ```bash
-uv run ctlmod new red_casual
+uv run control-mod new red_casual
 ```
 
 ```bash
-uv run ctlmod add red_casual jesse_civilian_publish_physx
+uv run control-mod add red_casual jesse_civilian_publish_physx
 ```
 
 `add` extracts the model into `mods/red_casual/models/<model>/` and lists the textures
@@ -185,16 +189,16 @@ A mod can contain several models (e.g. several outfits); run `add` once per mode
 
 ### 3.3 Edit
 
-Open the `.blend` (`ctlmod open red_casual`) and edit — see
+Open the `.blend` (`control-mod open red_casual`) and edit — see
 [section 4](#4-editing-in-blender--rules-of-the-road). Remember to **save** the
 `.blend` and any texture you painted. The `.blend` contains a text block
-**`ctlmod_READ_ME`** (Scripting workspace / Text Editor) with these rules and the list
+**`control-mod_READ_ME`** (Scripting workspace / Text Editor) with these rules and the list
 of shared textures.
 
 ### 3.4 Build
 
 ```bash
-uv run ctlmod build red_casual
+uv run control-mod build red_casual
 ```
 
 This runs Blender in the background to read your `.blend`, checks every change against
@@ -203,27 +207,34 @@ This runs Blender in the background to read your `.blend`, checks every change a
 happened, e.g.:
 
 ```
-texture modified: data_pc/textures/characters/andro/jesse/tops/jesse_civilian_jacket_d.tex
+texture added: data_pc/textures/control-mod/red_casual/.../jesse_civ_boots_gold_d.tex (from jesse_civ_boots_gold_d.png)
+material added: jesse_civ_boots_gold (based on jesse_civ_boots)
+texture modified: data_pc/textures/characters/andro/jesse/tops/jesse_civilian_tanktop_d.tex
 47 of 48 meshes unchanged (original data kept)
-model was 44,888 bytes over its size budget; LOD1 now uses LOD2's geometry (fits: 6,996,822 <= 7,878,072)
 WARNING: jesse_hands_d.tex is shared - this also changes 8 other model(s): jesse_hedron_publish_physx, ...
 ```
 
 If an edit can't work in the game, the build stops and lists every problem with what to
-do instead. Only files you actually changed end up in the mod.
+do instead. Only files you actually changed end up in the mod. New textures go to
+`data_pc/textures/control-mod/<mod>/<model>/`, so they never replace a game file.
+
+`--size-matched` builds the fallback mode that needs no generated metadata: every file
+keeps its original size (geometry has to fit the original buffers, LOD1 may borrow
+LOD2's geometry to make room) and only in-place texture edits are allowed. Use it if
+you install with another tool that can't ship `.packmeta` files.
 
 ### 3.5 Check
 
 ```bash
-uv run ctlmod render red_casual --built
+uv run control-mod render red_casual --built
 ```
 
 ```bash
-uv run ctlmod render red_casual --built --view face
+uv run control-mod render red_casual --built --view face
 ```
 
 ```bash
-uv run ctlmod impact red_casual
+uv run control-mod impact red_casual
 ```
 
 `--built` re-imports the **built game file** (not your `.blend`) and renders it to
@@ -234,15 +245,15 @@ changes outside its own models.
 ### 3.6 Install, test, uninstall
 
 ```bash
-uv run ctlmod install
+uv run control-mod install
 ```
 
 ```bash
-uv run ctlmod status
+uv run control-mod status
 ```
 
 ```bash
-uv run ctlmod uninstall
+uv run control-mod uninstall
 ```
 
 Quit the game before installing or uninstalling (the game keeps archives open).
@@ -261,28 +272,27 @@ The `.blend` contains:
   facing −Y, left side on +X,
 * one Blender material per game material, with image nodes for every texture slot
   (shared textures are **red** nodes labelled `SHARED xN`),
-* the `ctlmod_READ_ME` text block.
+* the `control-mod_READ_ME` text block.
 
 ### 4.1 Meshes
 
 * **Edit freely**: move/sculpt/remodel vertices, add or delete geometry, retopologise,
   change UVs, split or join objects. Modifiers are applied at build time (except the
   Armature modifier, which is ignored so the mesh is exported in rest pose).
-* **Size budget**: the game's metadata records each model's file size and the sizes of
-  its two vertex buffers and its index buffer, and allocates memory (including
-  ray-tracing data) from those. So the total amount of geometry across all LODs must not
-  exceed the original; the build pads whatever is left over so every size matches
-  exactly. Meshes you didn't touch keep their original data. If your edits add more
-  than that, the build gives LOD1 LOD2's geometry to make room, and if that is still not
-  enough it stops and tells you by how much. Keep added parts reasonably light (a
-  Decimate modifier helps) — deleting hidden geometry (e.g. body parts under clothing)
-  also frees room.
+* **Size**: the game's metadata records each model's file size, its vertex/index buffer
+  sizes and bounding box, and allocates memory (including ray-tracing data) from those.
+  The build writes new metadata for the rebuilt model, so models can grow. Meshes you
+  didn't touch keep their original data. Added geometry still costs memory and frame
+  time in every scene the character appears in — keep it reasonably light (a Decimate
+  modifier helps). With `--size-matched` the total geometry must fit the original
+  buffers instead (the build gives LOD1 LOD2's geometry to make room, and otherwise
+  stops and tells you by how much).
 * **The LOD comes from the collection** an object is in. An object outside any `LODn`
   collection counts as LOD0.
-* **Mesh slots stay the same**: the game expects every LOD to keep the original
-  model's list of meshes (one per material). ctlmod takes care of it:
-  * **new objects** are merged into the original mesh of the same LOD that uses the same
-    material — so give new parts one of the materials that LOD already has (4.3), plus
+* **Mesh slots**: the game expects the original meshes to stay in place, grouped by LOD.
+  control-mod takes care of it:
+  * **new objects** using a material the LOD already has are merged into that mesh;
+    objects with a new material (4.3) become extra meshes of their LOD. Give new parts
     bone weights (4.2). An object with several material slots is split per slot first;
   * **deleting** an original mesh's object leaves an invisible placeholder in its slot.
 * Objects whose name starts with `_` are ignored (handy for reference/helper objects).
@@ -313,8 +323,8 @@ The `.blend` contains:
 
 ### 4.3 Materials and textures
 
-You control **which of the model's materials each face uses** and **what the textures
-look like**:
+You control **which material each face uses**, **which textures a material uses** and
+**what the textures look like**:
 
 * **Repaint a texture in place**: paint it in Blender (Texture Paint, then
   *Image → Save*) or edit `textures/<name>.png` in any image editor. Keep its
@@ -325,11 +335,19 @@ look like**:
   [section 5](#5-shared-textures-changes-that-reach-other-models).
 * **Assign the model's existing materials** to new faces (material slots); new parts
   render with that material's textures (confirmed in game with the example mod's halo).
-* **Not possible yet** (the build refuses with an explanation): pointing a material's
-  image node at a different or new image, duplicating materials into new ones, and
-  resizing textures. The game binds textures from its own metadata, so these changes
-  would be silently ignored or crash. Want two pieces that share a material to look
-  different? Give them different areas of the same texture (UVs), or paint the texture.
+* **New textures**: point a material's image node at a new image (a new PNG next to the
+  `.blend`, e.g. in `textures/`) — the build turns it into a new game texture used only
+  by this model. It must have the **same resolution as the texture it replaces** (the
+  new texture's metadata is copied from that one). Pointing at another texture of the
+  model (an existing exported PNG) reuses that game texture.
+* **New materials**: duplicate a material (*Material → Copy*, or the `+` copy button in
+  the slot list), rename it and assign it to faces. The copy keeps the original's shader
+  and parameters; change its images as above. Good for making one piece look different
+  without touching the rest of the outfit (the example mod's gold halo). Materials not
+  copied from a game material (a fresh *New* material) are refused, since the game needs
+  a shader it knows.
+* **Not possible** (the build refuses with an explanation): resizing textures, and new
+  textures with a different resolution than the one they replace.
 * The preview material in Blender is an approximation (base colour × `g_vColorMultiplier`,
   normal map). The game's shaders also use smoothness/specular/detail/fuzz maps and
   parameters that Blender doesn't show — check the result in-game.
@@ -349,7 +367,7 @@ a tiny flat texture tinted by `g_vColorMultiplier`.
 
 ### 4.4 Material variants
 
-Some models switch materials at runtime (`ctlmod info` lists *material variants*,
+Some models switch materials at runtime (`control-mod info` lists *material variants*,
 e.g. Jesse Master's `frame`, NPCs' `hiss`). They are preserved automatically.
 
 ### 4.5 What can't be changed
@@ -360,14 +378,14 @@ changes may clip with animations or cloth, as in any game mod.
 
 ### 4.6 Levels of detail (LODs)
 
-The game switches to LOD1–3 at distance. Choose per model (`ctlmod add … --lods X`,
-or `ctlmod build <mod> --lods X` to change it):
+The game switches to LOD1–3 at distance. Choose per model (`control-mod add … --lods X`,
+or `control-mod build <mod> --lods X` to change it):
 
 | mode | LOD1+ come from | use when |
 |---|---|---|
 | `authored` *(default)* | the `LOD1`…`LOD3` collections, as in the `.blend` | texture-only mods, small edits, or you edit every LOD yourself |
 | `decimate` | LOD0, automatically decimated to each original LOD's triangle ratio | geometry changes without hand-made LODs |
-| `copy` | LOD0, copied | `--experimental` only (full copies never fit the size budget) |
+| `copy` | LOD0, copied | best quality at distance, heaviest (not with `--size-matched`) |
 
 A LOD whose original uses materials LOD0 doesn't have (Jesse's LOD3 is one baked mesh)
 keeps its original geometry in `decimate`/`copy` modes.
@@ -382,53 +400,67 @@ texture-only mods, visible at distance if you changed LOD0's shape (then use
 
 Many textures are used by more than one model — Jesse's face textures by all 12
 outfits, `jesse_hands_d` by 9, fabric detail maps by dozens of models, and
-`default*.tex` by hundreds. Repainting a shared texture changes **all** of them. ctlmod
+`default*.tex` by hundreds. Repainting a shared texture changes **all** of them. control-mod
 makes this visible at every step:
 
 | where | what you see |
 |---|---|
-| `ctlmod add` | a list of the model's shared textures and who else uses them |
-| Blender | red image nodes `SHARED xN: g_sColorMap`, images named `SHARED(N)_…`, and the `ctlmod_READ_ME` text |
-| `ctlmod build` | `WARNING: <texture> is shared - this also changes N other model(s): …` |
-| `ctlmod impact <mod>` | every file the mod changes, and every other model affected (`--all` for the full list); also edited-but-not-built textures |
-| `ctlmod install` | `note: '<mod>' edits shared textures - this also changes N other model(s)` |
-| `ctlmod usage <texture>` | which models use a texture (`--model <name>`: which textures of a model are shared) |
+| `control-mod add` | a list of the model's shared textures and who else uses them |
+| Blender | red image nodes `SHARED xN: g_sColorMap`, images named `SHARED(N)_…`, and the `control-mod_READ_ME` text |
+| `control-mod build` | `WARNING: <texture> is shared - this also changes N other model(s): …` |
+| `control-mod impact <mod>` | every file the mod changes, and every other model affected (`--all` for the full list); also edited-but-not-built textures |
+| `control-mod install` | `note: '<mod>' edits shared textures - this also changes N other model(s)` |
+| `control-mod usage <texture>` | which models use a texture (`--model <name>`: which textures of a model are shared) |
 
 The usage index is built from the game files themselves (all 6,707 models) and is
 rebuilt automatically after a game update. If a change to a shared texture is
 intended (e.g. a new face for every outfit), there is nothing else to do; otherwise
-pick a texture used only by your model (`ctlmod usage <model> --model` marks those
+pick a texture used only by your model (`control-mod usage <model> --model` marks those
 "only this model").
 
 ---
 
 ## 6. Example mod and in-game check
 
-`mods/demo_civilian` changes the default **Bureau Casual** outfit using only edits the
-game accepts:
+Two example mods change the default **Bureau Casual** outfit (both confirmed in game;
+enable one at a time, since they change the same model):
+
+`mods/demo_new_assets` (default build mode):
+
+| change | kind |
+|---|---|
+| **blue striped jacket** | brand-new texture for the jacket material |
+| **gold halo** over the head | new object with a new material (a copy of the boots' material with a new gold texture), weighted to `C_head_JNT` |
+| **red tank top** | texture repainted in place |
+
+`mods/demo_civilian` (`--size-matched`, no metadata):
 
 | change | kind |
 |---|---|
 | **red tank top** and **red jacket** | textures repainted in place (used only by this outfit) |
-| **halo** over the head | new object using the boots' material, weighted to `C_head_JNT` (merged into the boots mesh) |
+| **halo** over the head | new object using the boots' material (merged into the boots mesh); LOD1 reuses LOD2's geometry to make room |
 
-The halo makes the model about 44 KB larger, so the build reuses LOD2's geometry for
-LOD1 — a handy check that the size budget works. To try it:
+To try one:
 
-1. `ctlmod backup-saves`
-2. Close the game, then `ctlmod install`.
+1. `control-mod backup-saves`
+2. Close the game, then `control-mod install`.
 3. Start the game (Jesse wears Bureau Casual by default).
-4. `ctlmod uninstall` (game closed) restores the vanilla game.
+4. `control-mod uninstall` (game closed) restores the vanilla game.
 
-In a fresh clone the extracted model isn't in git; recreate the mod with
-`ctlmod add demo_civilian jesse_civilian_publish_physx --force`, run
-[`examples/demo_edit.py`](examples/demo_edit.py) on the `.blend`
-(`--halo jesse_civ_boots --recolor-png <tank top png> --recolor-png <jacket png>`), and
-`ctlmod build demo_civilian`. The script also shows how to script Blender edits.
+In a fresh clone the extracted model isn't in git. Recreate a mod with
+`control-mod add <mod> jesse_civilian_publish_physx --force`, run
+[`examples/demo_edit.py`](examples/demo_edit.py) on the `.blend`, then build:
+
+| mod | `demo_edit.py` options | build |
+|---|---|---|
+| `demo_new_assets` | `--halo jesse_civ_boots --halo-copy jesse_civ_boots gold --new-texture jesse_civ_jacket blue --recolor-png <tank top png>` | `control-mod build demo_new_assets` |
+| `demo_civilian` | `--halo jesse_civ_boots --recolor-png <tank top png> --recolor-png <jacket png>` | `control-mod build demo_civilian --size-matched` |
+
+The script also shows how to script Blender edits.
 
 If nothing changes in-game: make sure the game was closed while installing, check
-`ctlmod status`, try another patch slot (`ctlmod setup --patch-number 2` then
-`ctlmod install`), and see [Troubleshooting](#10-troubleshooting).
+`control-mod status`, try another patch slot (`control-mod setup --patch-number 2` then
+`control-mod install`), and see [Troubleshooting](#10-troubleshooting).
 
 ---
 
@@ -437,23 +469,24 @@ If nothing changes in-game: make sure the game was closed while installing, chec
 Control loads every `*.rmdp` archive in `data_packfiles`, and an archive named
 `ep100-001-generic` overrides files of `ep100-000-generic` (same for `-pc`, `ep101-…`,
 etc.). One archive per mod would collide as soon as two mods touch the same original
-archive — and all outfits live in the same one. So ctlmod **merges all enabled mods
-into one patch per original archive**, rebuilt on every `install`.
+archive — and all outfits live in the same one. So control-mod **merges all enabled mods
+into one patch per original archive**, rebuilt on every `install`, together with the
+`.packmeta` metadata for each patch.
 
 ```bash
-uv run ctlmod list
+uv run control-mod list
 ```
 
 ```bash
-uv run ctlmod disable red_casual
+uv run control-mod disable red_casual
 ```
 
 ```bash
-uv run ctlmod order red_casual 1
+uv run control-mod order red_casual 1
 ```
 
 ```bash
-uv run ctlmod install
+uv run control-mod install
 ```
 
 * **Per-outfit control**: each outfit is a separate model file, so a mod that only
@@ -461,24 +494,25 @@ uv run ctlmod install
   textures, which `install` and `impact` point out. Put outfits in separate mods if you
   want to toggle them separately.
 * **Load order**: if two enabled mods change the same file, the one later in
-  `ctlmod list` wins and `install`/`status` report the conflict.
-* **Safety**: archives written by ctlmod carry a marker; `uninstall` deletes only those.
-  If another (non-ctlmod) mod already uses patch slot 001, ctlmod moves to 002.
-* **After a game update**: rebuild your mods (`ctlmod build <mod>`) and `ctlmod install`
-  again — the size budget and textures come from the current game files.
-* **Loose files**: `ctlmod export-loose <folder>` writes the merged files as a folder
-  tree, for use with a loose-file loader instead of patch archives.
+  `control-mod list` wins and `install`/`status` report the conflict.
+* **Safety**: archives written by control-mod carry a marker; `uninstall` deletes only those.
+  If another (non-control-mod) mod already uses patch slot 001, control-mod moves to 002.
+* **After a game update**: rebuild your mods (`control-mod build <mod>`) and `control-mod install`
+  again — metadata and textures come from the current game files.
+* **Loose files**: `control-mod export-loose <folder>` writes the merged files as a folder
+  tree, for use with a loose-file loader instead of patch archives. Loose files carry no
+  metadata, so build such mods with `--size-matched`.
 
 ---
 
 ## 8. Sharing mods
 
 ```bash
-uv run ctlmod pack red_casual
+uv run control-mod pack red_casual
 ```
 
 ```bash
-uv run ctlmod unpack dist\red_casual-1.0.0.zip
+uv run control-mod unpack dist\red_casual-1.0.0.zip
 ```
 
 `pack` zips `mod.toml` + the built files into `dist/`; `--sources` also includes the
@@ -491,7 +525,7 @@ Note that packed mods contain (modified) game assets — share responsibly.
 ## 9. Save game backups
 
 ```bash
-uv run ctlmod backup-saves
+uv run control-mod backup-saves
 ```
 
 Copies your saves (Steam: `Steam\userdata\<id>\870780`; Epic/GOG:
@@ -504,15 +538,15 @@ restore, quit the game, pause Steam Cloud, and copy the files back.
 
 | problem | fix |
 |---|---|
-| `Blender not found` / `Game directory not configured` | `ctlmod setup --blender … --game …` |
-| `matches N models; be more specific` | use the exact name from `ctlmod find` |
+| `Blender not found` / `Game directory not configured` | `control-mod setup --blender … --game …` |
+| `matches N models; be more specific` | use the exact name from `control-mod find` |
 | build: `… cannot work in the game: …` | each listed item says what to do instead (section 4.3) |
-| build: `… larger than the original even with the simplest LODs` | lighten or remove added geometry (4.1) |
+| build: `… larger than the original even with the simplest LODs` (`--size-matched`) | lighten or remove added geometry, or build without `--size-matched` (4.1) |
 | build: `mesh '…' has no vertex groups` | weight the mesh (4.2) or parent it to a bone |
-| build: `material '…' is not a game material` | use one of the model's materials (4.3) |
+| build: `material '…' is not a game material` | copy one of the model's materials instead of creating a new one (4.3) |
+| build: new image `…` has a different resolution | resize the image to the replaced texture's size (4.3) |
 | build: `no LOD0 meshes found` | keep meshes in the `LOD0` collection |
-| build: `new geometry in LODn uses material '…', which no original LODn mesh uses` | give the part a material that LOD already has (4.1) |
-| game crashes while loading a save | something bypassed the checks (e.g. `--experimental`); `ctlmod uninstall`, rebuild without it |
+| game crashes at startup or while loading a save | `control-mod uninstall`; if the mod was built with `--experimental`, rebuild without it; check that the `.packmeta` next to the patch was installed |
 | model looks fine close up but wrong far away | stale LODs with `authored` → `--lods decimate`, or edit LOD1–3 |
 | textures look washed out / wrong in Blender | Blender preview ≠ game shader; normal/mask maps are Non-Color |
 | `add --force` lost my edits | `--force` re-exports from the game; keep backups of your `.blend` |
@@ -539,11 +573,11 @@ original's metadata.
 | `new <mod>` | create a mod project |
 | `add <mod> <model> [--lods] [--force]` | extract a model and create its `.blend` |
 | `open <mod> [model]` | open the `.blend` in Blender |
-| `build <mod> [--lods] [--install] [--experimental]` | `.blend` → game files (checked against what the game accepts) |
+| `build <mod> [--lods] [--install] [--size-matched] [--experimental]` | `.blend` → game files (checked against what the game accepts) |
 | `render <mod> [model] [--built] [--view] [--lod]` | preview image |
 | `impact <mod> [--all]` | what the mod changes outside its own models |
 | `list`, `enable`, `disable`, `order` | mod manager |
-| `install [--dry-run]`, `uninstall`, `status` | apply / remove mods |
+| `install [--dry-run] [--metadata]`, `uninstall`, `status` | apply / remove mods (`--metadata` writes `.packmeta` even when only size-matched mods are enabled) |
 | `export-loose <dir>` | merged files as folders |
 | `pack <mod> [--sources]`, `unpack <zip>` | share mods |
 | `backup-saves` | back up save games |
@@ -554,21 +588,22 @@ original's metadata.
 ## 12. How it works / development
 
 ```
-src/ctlmod/
+src/control_mod/
   archive.py     .bin/.rmdp archives (read/write)
   binfbx.py      .binfbx model files (lossless parse/serialise)
   geometry.py    vertex/index buffer decode/encode
-  model.py       rebuild a .binfbx from edited meshes; fit it to the size budget
+  model.py       rebuild a .binfbx from edited meshes (or fit it to the original size)
+  packmeta.py    .packmeta archive metadata (read/write)
   texture.py     .tex (DDS) <-> images, BC1/3/4/5/7
   package.py     game <-> Blender conversion, model packages, checked build from Blender
   usage.py       game-wide index of which models use which textures
   gamedata.py    all game archives as one file system
   project.py     mod projects, Blender driver
-  installer.py   mod manager
+  installer.py   mod manager, patch archives and their metadata
   cli.py         command line
   blender/ctl_blender.py   runs inside Blender (import/export/render)
-examples/demo_edit.py      scripted Blender edits (halo, recolour)
-docs/FORMATS.md            file format notes, including what is known about .packmeta
+examples/demo_edit.py      scripted Blender edits (halo, new material/texture, recolour)
+docs/FORMATS.md            file format notes
 tests/                     pytest suite
 ```
 
@@ -579,7 +614,15 @@ uv run pytest
 ```
 
 Synthetic tests always run; tests needing the game or Blender skip automatically when
-those aren't found (`CTLMOD_GAME_DIR`, `CTLMOD_BLENDER` override detection). Set
-`CTLMOD_FULL_SCAN=1` to round-trip every game model instead of only characters.
+those aren't found (`CONTROL_MOD_GAME_DIR`, `CONTROL_MOD_BLENDER` override detection). Set
+`CONTROL_MOD_FULL_SCAN=1` to round-trip every game model instead of only characters.
+
+GitHub Actions run the tests on Windows and Linux for every push to `main` and every
+pull request (game/Blender tests skip there, so also run `uv run pytest` locally with
+both installed before releasing).
+
+Releasing: *Actions → Release → Run workflow* with a version (e.g. `0.2.0`) bumps
+`pyproject.toml`, tags `v0.2.0`, and publishes a GitHub release with the wheel and
+sdist. Pushing a `v*` tag that matches the version in `pyproject.toml` does the same.
 
 File format details are in [docs/FORMATS.md](docs/FORMATS.md).

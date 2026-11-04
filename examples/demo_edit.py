@@ -1,4 +1,4 @@
-"""Example of scripted edits to a ctlmod .blend - the same things a modder does by hand.
+"""Example of scripted edits to a control-mod .blend - the same things a modder does by hand.
 
 Run with:
     blender --background <model>.blend --python examples/demo_edit.py -- [options]
@@ -14,12 +14,15 @@ Options:
                           texture PNG instead of creating a new texture file
 * ``--recolor-png PATH``  tints an exported PNG red in place (edits the original
                           texture: affects every model that uses it); repeatable
-* ``--red-copy`` / ``--copy-texture`` / ``--red-jacket`` create new materials or
-  textures, which the game does not load yet: builds need ``--experimental``
+* ``--new-texture MATERIAL COLOR``  gives MATERIAL a brand-new striped colour map (same
+                          resolution as the one it replaces; COLOR: red, blue, gold, ...)
+* ``--halo-copy MATERIAL COLOR``  makes the halo (``--halo``) use a new copy of MATERIAL
+                          with a new striped colour map
+* new materials / new textures need ``control-mod build --metadata``
 * ``--halo`` / ``--red-jacket`` without a name keep working for the Formal suit
   (``jesse_suit_accessories`` / ``jesse_suit_jacket``)
 
-Material names are the game's, as listed by ``ctlmod info <model>``.
+Material names are the game's, as listed by ``control-mod info <model>``.
 """
 
 import sys
@@ -51,6 +54,35 @@ def game_material(name: str) -> bpy.types.Material:
     raise SystemExit(f"no game material named {name!r}")
 
 
+COLORS = {"red": (0.85, 0.05, 0.05), "blue": (0.1, 0.25, 0.9), "gold": (1.0, 0.75, 0.15),
+          "green": (0.1, 0.7, 0.2), "white": (0.95, 0.95, 0.95)}
+
+
+def option_pair(flag: str) -> tuple[str, str] | None:
+    if flag not in argv:
+        return None
+    i = argv.index(flag)
+    return argv[i + 1], argv[i + 2]
+
+
+def striped_image(name: str, like: bpy.types.Image, color: str) -> bpy.types.Image:
+    """A new PNG next to the .blend with the size of ``like``: COLOR with dark stripes."""
+    w, h = like.size
+    if not w or not h:
+        raise SystemExit(f"cannot read {like.filepath} - keep the .blend next to its textures/ folder")
+    rgb = np.array(COLORS[color], np.float32)
+    px = np.ones((h, w, 4), np.float32)
+    px[..., :3] = rgb
+    stripes = (np.arange(w) // max(w // 16, 1)) % 2 == 1
+    px[:, stripes, :3] *= 0.35
+    img = bpy.data.images.new(name, w, h)
+    img.pixels.foreach_set(px.ravel())
+    img.filepath_raw = str(blend_dir / "textures" / f"{name}.png")
+    img.file_format = "PNG"
+    img.save()
+    return img
+
+
 halo_mat = option("--halo", "jesse_suit_accessories")
 if halo_mat:
     head = arm.data.bones["C_head_JNT"]
@@ -62,7 +94,17 @@ if halo_mat:
         c.objects.unlink(halo)
     lod0.objects.link(halo)
     bpy.ops.object.shade_smooth()
-    halo.data.materials.append(game_material(halo_mat))
+    halo_copy = option_pair("--halo-copy")
+    if halo_copy:
+        src_mat, color = halo_copy
+        mat = game_material(src_mat).copy()  # keeps the ctl_* properties -> a new game material
+        mat.name = f"{src_mat}_{color}"
+        node = mat.node_tree.nodes["g_sColorMap"]
+        node.image = striped_image(f"{mat.name}_d", node.image, color)
+        halo.data.materials.append(mat)
+        print(f"[demo] halo uses new material {mat.name} with a new texture")
+    else:
+        halo.data.materials.append(game_material(halo_mat))
     vg = halo.vertex_groups.new(name="C_head_JNT")
     vg.add(list(range(len(halo.data.vertices))), 1.0, "REPLACE")
     halo.parent = arm
@@ -70,6 +112,13 @@ if halo_mat:
     mod = halo.modifiers.new("Armature", "ARMATURE")
     mod.object = arm
     print(f"[demo] added halo ({halo_mat})")
+
+new_tex = option_pair("--new-texture")
+if new_tex:
+    mat_name, color = new_tex
+    node = game_material(mat_name).node_tree.nodes["g_sColorMap"]
+    node.image = striped_image(f"{mat_name}_{color}_d", node.image, color)
+    print(f"[demo] {mat_name} now uses a new {color} striped texture")
 
 red_src = option("--red-copy") or ("jesse_suit_jacket" if "--red-jacket" in argv else None)
 reuse = option("--copy-texture")  # existing exported PNG -> the copy references that game texture

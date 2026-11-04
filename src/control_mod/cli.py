@@ -1,4 +1,4 @@
-"""``ctlmod`` command line interface. Run ``ctlmod --help`` or ``ctlmod <command> --help``."""
+"""``control-mod`` command line interface. Run ``control-mod --help`` or ``control-mod <command> --help``."""
 
 from __future__ import annotations
 
@@ -34,7 +34,7 @@ def _pick_model(gd, pattern: str) -> str:
     if len(hits) == 1:
         return hits[0].entry.path
     if not hits:
-        raise SystemExit(f"no model matches '{pattern}'. Try: ctlmod find {pattern}")
+        raise SystemExit(f"no model matches '{pattern}'. Try: control-mod find {pattern}")
     listing = "\n  ".join(h.entry.path for h in hits[:30])
     raise SystemExit(f"'{pattern}' matches {len(hits)} models; be more specific:\n  {listing}")
 
@@ -134,7 +134,7 @@ def cmd_new(cfg: Config, a) -> None:
     st = _state(cfg)
     st.save()
     print(f"created mod '{mod.id}' at {mod.root}")
-    print(f"next: ctlmod add {mod.id} <model>   (find models with: ctlmod find jesse)")
+    print(f"next: control-mod add {mod.id} <model>   (find models with: control-mod find jesse)")
 
 
 def cmd_add(cfg: Config, a) -> None:
@@ -144,7 +144,7 @@ def cmd_add(cfg: Config, a) -> None:
     mod = Mod.load(cfg, a.mod)
     path = _pick_model(gd, a.model)
     name = mod.add_model(cfg, gd, path, a.lods, overwrite=a.force)
-    print(f"\nadded {name}. Edit it in Blender:\n  {mod.blend_path(name)}\n(or run: ctlmod open {mod.id} {name})")
+    print(f"\nadded {name}. Edit it in Blender:\n  {mod.blend_path(name)}\n(or run: control-mod open {mod.id} {name})")
 
 
 def cmd_open(cfg: Config, a) -> None:
@@ -167,9 +167,9 @@ def cmd_build(cfg: Config, a) -> None:
         for m in mod.models.values():
             m.lods = a.lods
         mod.save()
-    mod.build(cfg, gd, experimental=a.experimental)
+    mod.build(cfg, gd, experimental=a.experimental, metadata=not a.size_matched)
     if a.install:
-        cmd_install(cfg, argparse.Namespace(dry_run=False))
+        cmd_install(cfg, argparse.Namespace(dry_run=False, metadata=False))
 
 
 def cmd_render(cfg: Config, a) -> None:
@@ -187,7 +187,7 @@ def cmd_render(cfg: Config, a) -> None:
             gd = _gd(cfg)
             built = mod.build_dir / "files" / mod.models[name].source
             if not built.exists():
-                raise SystemExit("not built yet: ctlmod build " + mod.id)
+                raise SystemExit("not built yet: control-mod build " + mod.id)
             tmp = mod.root / ".preview" / name
             textures_dir = mod.build_dir / "files"
 
@@ -210,7 +210,7 @@ def cmd_list(cfg: Config, a) -> None:
     st = _state(cfg)
     st.save()
     if not st.order:
-        print("no mods yet. Create one with: ctlmod new <id>")
+        print("no mods yet. Create one with: control-mod new <id>")
         return
     installed = set(st.installed.get("mods", []))
     print(f"{'#':>2}  {'on':<3} {'mod':<28} {'built':<6} {'installed':<9} models")
@@ -219,7 +219,7 @@ def cmd_list(cfg: Config, a) -> None:
         on = "yes" if st.enabled.get(m, True) else "no"
         built = "yes" if mod.manifest() else "no"
         print(f"{i + 1:>2}  {on:<3} {m:<28} {built:<6} {'yes' if m in installed else 'no':<9} {', '.join(mod.models) or '-'}")
-    print("\nLater mods win when two mods change the same file. Change order with: ctlmod order <mod> <position>")
+    print("\nLater mods win when two mods change the same file. Change order with: control-mod order <mod> <position>")
 
 
 def cmd_enable(cfg: Config, a, value: bool) -> None:
@@ -229,7 +229,7 @@ def cmd_enable(cfg: Config, a, value: bool) -> None:
             raise SystemExit(f"unknown mod '{m}'")
         st.enabled[m] = value
     st.save()
-    print(("enabled " if value else "disabled ") + ", ".join(a.mods) + ". Run 'ctlmod install' to apply.")
+    print(("enabled " if value else "disabled ") + ", ".join(a.mods) + ". Run 'control-mod install' to apply.")
 
 
 def cmd_order(cfg: Config, a) -> None:
@@ -246,7 +246,7 @@ def cmd_install(cfg: Config, a) -> None:
     from . import installer
 
     gd = _gd(cfg)
-    installer.install(cfg, gd, _state(cfg), dry_run=a.dry_run)
+    installer.install(cfg, gd, _state(cfg), dry_run=a.dry_run, metadata=a.metadata)
 
 
 def cmd_impact(cfg: Config, a) -> None:
@@ -344,7 +344,7 @@ def cmd_status(cfg: Config, a) -> None:
     current = {k: v[2] for k, v in plan.files.items()}
     was = {k.lower(): v for k, v in st.installed.get("files", {}).items()}
     if current != was:
-        print("NOTE: enabled mods/builds differ from what is installed - run 'ctlmod install'")
+        print("NOTE: enabled mods/builds differ from what is installed - run 'control-mod install'")
     for path, loser, winner in plan.conflicts:
         print(f"conflict: {path}: '{winner}' overrides '{loser}'")
 
@@ -367,7 +367,7 @@ def cmd_unpack(cfg: Config, a) -> None:
     mod_id = installer.unpack_mod(cfg, Path(a.zip), force=a.force)
     st = _state(cfg)
     st.save()
-    print(f"'{mod_id}' added (enabled). Run 'ctlmod install' to apply.")
+    print(f"'{mod_id}' added (enabled). Run 'control-mod install' to apply.")
 
 
 def save_dirs(steam_root: Path | None = None) -> list[Path]:
@@ -427,8 +427,8 @@ def cmd_selftest(cfg: Config, a) -> None:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="ctlmod", description="Control: Ultimate Edition model/outfit modding toolkit")
-    p.add_argument("--workspace", help="workspace folder (default: nearest folder with ctlmod.toml)")
+    p = argparse.ArgumentParser(prog="control-mod", description="Control: Ultimate Edition model/outfit modding toolkit")
+    p.add_argument("--workspace", help="workspace folder (default: nearest folder with control-mod.toml)")
     sub = p.add_subparsers(dest="cmd", required=True, metavar="<command>")
 
     s = sub.add_parser("setup", help="configure game and Blender paths")
@@ -480,7 +480,10 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--lods", choices=["authored", "copy", "decimate"], help="override LOD mode for all models")
     s.add_argument("--install", action="store_true", help="install enabled mods afterwards")
     s.add_argument("--experimental", action="store_true",
-                   help="allow edits the game is not known to load (new materials/textures, larger models)")
+                   help="skip all checks (e.g. new textures at a different resolution) - for experiments only")
+    s.add_argument("--size-matched", action="store_true",
+                   help="fallback mode without generated metadata: keep every file at its original size "
+                        "and refuse new materials/textures")
     s.set_defaults(func=cmd_build)
 
     s = sub.add_parser("render", help="render a preview image of a mod's model")
@@ -506,6 +509,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     s = sub.add_parser("install", help="install all enabled, built mods into the game")
     s.add_argument("--dry-run", action="store_true")
+    s.add_argument("--metadata", action="store_true", help="write .packmeta metadata for every patch archive")
     s.set_defaults(func=cmd_install)
     s = sub.add_parser("impact", help="show what a mod changes outside its own models (shared textures)")
     s.add_argument("mod")
@@ -516,7 +520,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--model", action="store_true")
     s.add_argument("--limit", type=int, default=50)
     s.set_defaults(func=cmd_usage)
-    s = sub.add_parser("uninstall", help="remove everything ctlmod installed")
+    s = sub.add_parser("uninstall", help="remove everything control-mod installed")
     s.set_defaults(func=cmd_uninstall)
     s = sub.add_parser("status", help="show what is installed and pending")
     s.set_defaults(func=cmd_status)
@@ -529,7 +533,7 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("-o", "--output")
     s.add_argument("--sources", action="store_true", help="include .blend and model packages")
     s.set_defaults(func=cmd_pack)
-    s = sub.add_parser("unpack", help="add a mod from a zip made by 'ctlmod pack'")
+    s = sub.add_parser("unpack", help="add a mod from a zip made by 'control-mod pack'")
     s.add_argument("zip")
     s.add_argument("--force", action="store_true")
     s.set_defaults(func=cmd_unpack)

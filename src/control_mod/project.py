@@ -4,8 +4,8 @@
 
     mods/<id>/
         mod.toml                    name, author, description, models and their options
-        models/<model>/             model package (see ctlmod.package) + <model>.blend
-        build/files/<archive path>  game files produced by ``ctlmod build``
+        models/<model>/             model package (see control_mod.package) + <model>.blend
+        build/files/<archive path>  game files produced by ``control-mod build``
         build/manifest.json         what the build contains and which archive each file overrides
 """
 
@@ -37,7 +37,7 @@ def run_blender(cfg: Config, args: list[str], blend: Path | None = None, log: Ca
     proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     lines = (proc.stdout + proc.stderr).splitlines()
     for ln in lines:
-        if ln.startswith("[ctlmod]") and ("warning" in ln or "note" in ln or "exported" in ln or "saved" in ln or "rendered" in ln):
+        if ln.startswith("[control-mod]") and ("warning" in ln or "note" in ln or "exported" in ln or "saved" in ln or "rendered" in ln):
             log("  blender: " + ln[9:])
     if proc.returncode != 0 or any("Traceback" in ln for ln in lines):
         tail = "\n".join(lines[-40:])
@@ -99,7 +99,7 @@ class Mod:
             "description": self.description,
             "models": {k: {"source": m.source, "lods": m.lods} for k, m in self.models.items()},
         }
-        write_toml(self.root / "mod.toml", data, "# ctlmod mod definition")
+        write_toml(self.root / "mod.toml", data, "# control-mod mod definition")
 
     # ------------------------------------------------------------- paths
     def model_dir(self, name: str) -> Path:
@@ -153,25 +153,26 @@ class Mod:
             for t, others in sorted(shared.items(), key=lambda kv: -len(kv[1]))[:12]:
                 log(f"    {Path(t).stem:<45} also used by {len(others):>4}: {describe(others, 3)}")
             if len(shared) > 12:
-                log(f"    ... and {len(shared) - 12} more (they are marked SHARED in Blender; see 'ctlmod impact')")
+                log(f"    ... and {len(shared) - 12} more (they are marked SHARED in Blender; see 'control-mod impact')")
         log("creating Blender file ...")
         run_blender(cfg, ["import", str(d), str(self.blend_path(name))], log=log)
         self.models[name] = ModelEntry(name, loc.entry.path, lods)
         self.save()
         return name
 
-    def build(self, cfg: Config, gd: GameData, log=print, experimental: bool = False) -> dict:
+    def build(self, cfg: Config, gd: GameData, log=print, experimental: bool = False, metadata: bool = True) -> dict:
         """Build all models into ``build/files`` and write ``build/manifest.json``.
 
-        By default only edits the game is known to load are allowed (see
-        ``package.build_from_blender``), and every replaced file is padded to exactly the
-        original's size, because the game sizes load buffers from the original
-        archive's metadata. ``experimental`` lifts both restrictions.
+        With ``metadata`` (the default) the installer writes a ``.packmeta`` describing
+        the new files, so models may grow and materials/textures may be added. Without
+        it, every replaced file is padded to exactly the original's size and only edits
+        that fit the original metadata are allowed (see ``package.build_from_blender``).
+        ``experimental`` lifts all checks.
         """
         from .usage import TextureUsage, describe
 
         if not self.models:
-            raise SystemExit(f"mod '{self.id}' has no models. Add one with: ctlmod add {self.id} <model>")
+            raise SystemExit(f"mod '{self.id}' has no models. Add one with: control-mod add {self.id} <model>")
         usage = TextureUsage.load(gd, cfg.state_dir, progress=log)
         own_models = {m.source for m in self.models.values()}
         files_dir = self.build_dir / "files"
@@ -188,7 +189,8 @@ class Mod:
             log(f"[{name}] reading Blender file (LODs: {m.lods}) ...")
             run_blender(cfg, ["export", str(d), "--lods", m.lods], blend=blend, log=log)
             res = package.build_from_blender(
-                d, read_texture=gd.try_read, new_texture_root=f"data_pc/textures/ctlmod/{self.id}", log=log, strict=not experimental
+                d, read_texture=gd.try_read, new_texture_root=f"data_pc/textures/control-mod/{self.id}", log=log,
+                strict=not experimental, size_budget=not metadata,
             )
             outputs = {m.source: res.binfbx, **res.textures}
             for apath, data in outputs.items():
@@ -199,7 +201,7 @@ class Mod:
                     base = loc.archive_name
                     new = False
                     orig_size = loc.entry.size
-                    if not experimental:
+                    if not experimental and not metadata:
                         if len(data) > orig_size:  # fit_to_size / resolution checks should prevent this
                             raise package.BuildError(f"{apath} is larger than the original ({len(data):,} > {orig_size:,} bytes)")
                         data = data + bytes(orig_size - len(data))
@@ -219,13 +221,13 @@ class Mod:
                 dest.write_bytes(data)
                 entries.append({
                     "path": apath, "archive": base, "new": new, "model": name, "size": len(data),
-                    "original_size": orig_size, "also_affects": affects,
+                    "original_size": orig_size, "also_affects": affects, "derived_from": res.derived.get(apath),
                 })
             for line in res.report:
                 log(f"  {line}")
             reports[name] = res.report
         manifest = {"id": self.id, "name": self.name, "version": self.version, "experimental": experimental,
-                    "files": entries, "reports": reports}
+                    "metadata": metadata or experimental, "files": entries, "reports": reports}
         self.manifest_path.write_text(json.dumps(manifest, indent=1))
         log(f"built {len(entries)} files into {files_dir}")
         return manifest

@@ -3,12 +3,12 @@
 import json
 
 from conftest import material, synthetic_fbx
-from ctlmod import installer
-from ctlmod.archive import write_archive
-from ctlmod.config import Config, State
-from ctlmod.gamedata import GameData
-from ctlmod.project import Mod
-from ctlmod.usage import TextureUsage, describe
+from control_mod import installer
+from control_mod.archive import write_archive
+from control_mod.config import Config, State
+from control_mod.gamedata import GameData
+from control_mod.project import Mod
+from control_mod.usage import TextureUsage, describe
 
 FACE = "runtimedata\\data_pc\\textures\\test\\face_d.tex"
 SUIT = "runtimedata\\data_pc\\textures\\test\\suit_d.tex"

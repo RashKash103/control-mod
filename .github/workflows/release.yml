@@ -1,0 +1,78 @@
+name: Release
+
+# Two ways to release:
+#   * Actions -> Release -> Run workflow, enter a version (e.g. 0.2.0): bumps pyproject.toml,
+#     commits, tags v0.2.0 and publishes the release.
+#   * push a tag yourself: git tag v0.2.0 && git push origin v0.2.0 (the tag must match
+#     the version in pyproject.toml).
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+
+jobs:
+  tests:
+    uses: ./.github/workflows/ci.yml
+
+  tag:
+    needs: tests
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v6
+      - name: Bump version and tag
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([a-z0-9.+-]*)?$ ]]; then
+            echo "::error::'$VERSION' is not a version like 1.2.3"; exit 1
+          fi
+          if git ls-remote --exit-code --tags origin "v$VERSION" >/dev/null; then
+            echo "::error::tag v$VERSION already exists"; exit 1
+          fi
+          uv version "$VERSION"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Release v$VERSION"
+          git tag -a "v$VERSION" -m "control-mod v$VERSION"
+          git push origin "HEAD:$GITHUB_REF_NAME" "v$VERSION"
+      - name: Check tag matches version
+        id: tag
+        run: |
+          VERSION="$(uv version --short)"
+          TAG="${GITHUB_REF_NAME}"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then TAG="v${{ inputs.version }}"; fi
+          if [ "$TAG" != "v$VERSION" ]; then
+            echo "::error::tag $TAG does not match pyproject.toml version $VERSION"; exit 1
+          fi
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+  release:
+    needs: tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.tag.outputs.tag }}
+      - uses: astral-sh/setup-uv@v6
+      - name: Build sdist and wheel
+        run: uv build
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.tag.outputs.tag }}
+        run: gh release create "$TAG" dist/* --title "control-mod $TAG" --generate-notes --verify-tag

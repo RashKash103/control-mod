@@ -7,10 +7,10 @@ import numpy as np
 import pytest
 
 from conftest import BLENDER, needs_blender, needs_game
-from ctlmod import package
-from ctlmod.binfbx import BinFbx
-from ctlmod.geometry import decode
-from ctlmod.project import BLENDER_SCRIPT
+from control_mod import package
+from control_mod.binfbx import BinFbx
+from control_mod.geometry import decode
+from control_mod.project import BLENDER_SCRIPT
 
 pytestmark = [needs_game, needs_blender, pytest.mark.blender]
 ROOT = Path(__file__).resolve().parents[1]
@@ -33,10 +33,10 @@ def run_script(blend, script, *args):
 
 @pytest.fixture(scope="module")
 def pkg(tmp_path_factory, game):
-    from ctlmod.usage import TextureUsage
+    from control_mod.usage import TextureUsage
 
     d = tmp_path_factory.mktemp("pkg") / "jesse_suit"
-    usage = TextureUsage.load(game, ROOT / ".ctlmod", progress=None)
+    usage = TextureUsage.load(game, ROOT / ".control-mod", progress=None)
     package.export_package(game.read(MODEL), MODEL, d, game.try_read, log=lambda s: None,
                            shared_with=lambda t: usage.others(t, MODEL))
     blender("import", d, d / "model.blend")
@@ -49,7 +49,7 @@ def test_blend_flags_shared_textures(pkg):
         "labels = [n.label for m in bpy.data.materials if m.node_tree for n in m.node_tree.nodes if n.get('ctl_shared_with')]\n"
         "print('SHARED_NODES', len(labels))\n"
         "print('SHARED_IMAGES', sum(1 for i in bpy.data.images if i.name.startswith('SHARED(')))\n"
-        "print('README', 'ctlmod_READ_ME' in bpy.data.texts and 'SHARED TEXTURES' in bpy.data.texts['ctlmod_READ_ME'].as_string())\n"
+        "print('README', 'control-mod_READ_ME' in bpy.data.texts and 'SHARED TEXTURES' in bpy.data.texts['control-mod_READ_ME'].as_string())\n"
     )
     cmd = [str(BLENDER), "--background", str(pkg / "model.blend"), "--python-expr", script]
     out = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace").stdout
@@ -108,6 +108,29 @@ def test_new_material_and_texture_are_refused(pkg, game, tmp_path):
     assert "jesse_suit_jacket_red" in str(e.value) and "new image" in str(e.value)
     res = package.build_from_blender(pkg, read_texture=game.try_read, log=lambda s: None, strict=False)
     assert "jesse_suit_jacket_red" in [m.name.text for m in BinFbx.parse(res.binfbx).materials]
+
+
+def test_metadata_mode_allows_new_materials_and_textures(pkg, game, tmp_path):
+    """The default build mode (with generated .packmeta) - confirmed in game."""
+    blend = pkg / "new_assets.blend"  # next to textures/, so image sizes can be read
+    blend.write_bytes((pkg / "model.blend").read_bytes())
+    run_script(blend, ROOT / "examples" / "demo_edit.py", "--halo", "jesse_suit_accessories",
+               "--halo-copy", "jesse_suit_accessories", "gold", "--new-texture", "jesse_suit_jacket", "blue")
+    blender("export", pkg, blend=blend)
+    res = package.build_from_blender(pkg, read_texture=game.try_read, log=lambda s: None, size_budget=False)
+    out = BinFbx.parse(res.binfbx)
+    names = [m.name.text for m in out.materials]
+    assert "jesse_suit_accessories_gold" in names
+    orig = BinFbx.parse(game.read(MODEL))
+    assert len(out.meshes) == len(orig.meshes) + 1  # the halo is an extra mesh with its own material
+    assert [m.lod for m in out.meshes] == sorted(m.lod for m in out.meshes)
+    new_textures = {p: like for p, like in res.derived.items()}
+    assert len(new_textures) == 2 and all(p.startswith("data_pc/textures/control-mod/") for p in new_textures)
+    jacket = out.materials[names.index("jesse_suit_jacket")].param("g_sColorMap").value
+    assert jacket.nul and jacket.text.endswith("jesse_suit_jacket_blue_d.tex")
+    # new textures are encoded exactly like (same size as) the texture they replace
+    for p, like in new_textures.items():
+        assert len(res.textures[p]) == len(game.read(like))
 
 
 def test_lod_copy_mode(pkg, game):

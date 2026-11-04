@@ -54,7 +54,7 @@ FILE_SIZE = struct.calcsize(FILE_FMT)  # 60
 FOLDER_UNK = 0xCACACACA
 DATA_ALIGN = 32
 TAG_OFFSET = 13  # inside the 128-byte tag area (absolute byte 38)
-MARKER_OFFSET = 96  # where ctlmod puts its marker, in the area the game leaves as garbage
+MARKER_OFFSET = 96  # where control-mod puts its marker, in the area the game leaves as garbage
 FILETIME_EPOCH = 116444736000000000  # 1601-01-01 -> 1970-01-01 in 100 ns units
 
 

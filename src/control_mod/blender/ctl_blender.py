@@ -1,12 +1,12 @@
-"""Blender side of ctlmod. Runs *inside* Blender; only uses bpy, numpy and the stdlib.
+"""Blender side of control-mod. Runs *inside* Blender; only uses bpy, numpy and the stdlib.
 
-Invoked by the ``ctlmod`` CLI as::
+Invoked by the ``control-mod`` CLI as::
 
     blender --background --factory-startup --python ctl_blender.py -- import <pkg_dir> <out.blend>
     blender --background <file.blend> --python ctl_blender.py -- export <pkg_dir> [--lods authored|copy|decimate]
     blender --background <file.blend> --python ctl_blender.py -- render <out.png> [--view front|back|side|face] [--lod N]
 
-Conventions shared with ``ctlmod.package`` (game <-> Blender conversion is done there):
+Conventions shared with ``control_mod.package`` (game <-> Blender conversion is done there):
 
 * each game mesh is one object; its LOD comes from the collection it lives in
   (``LOD0``, ``LOD1`` ...); a mesh with several material slots is split per slot
@@ -30,7 +30,7 @@ COLOR_PARAMS = ("g_sColorMap", "g_sBaseColorMap", "g_sDiffuseMap")
 
 
 def log(*a):
-    print("[ctlmod]", *a, flush=True)
+    print("[control-mod]", *a, flush=True)
 
 
 # =============================================================================== import
@@ -197,7 +197,7 @@ def do_import(pkg: Path, out_blend: Path):
 def _readme(meta: dict):
     """A text block (Scripting / Text Editor) with the rules and the shared textures."""
     lines = [
-        f"ctlmod - {meta['name']}",
+        f"control-mod - {meta['name']}",
         "",
         "WHAT THE GAME ACCEPTS (see README):",
         "  * edit, add or delete geometry in LOD0..LOD3; weight new parts to existing bones",
@@ -219,7 +219,7 @@ def _readme(meta: dict):
             lines.append(f"  {png:<55} {len(others):>4} other model(s): {names}{more}")
     else:
         lines.append("None of this model's textures are used by other models.")
-    txt = bpy.data.texts.new("ctlmod_READ_ME")
+    txt = bpy.data.texts.new("control-mod_READ_ME")
     txt.write("\n".join(lines) + "\n")
 
 
@@ -341,7 +341,7 @@ def _dump_object(ob, arm, lod: int, decimate_ratio: float | None, meshes: list, 
                 "uv_count": len(uvs),
                 "color_count": len(cols),
                 "groups": groups,
-                # decimation scrambles custom normals: let ctlmod recompute smooth ones
+                # decimation scrambles custom normals: let control-mod recompute smooth ones
                 "smooth_normals": dec is not None,
             })
         ev.to_mesh_clear()

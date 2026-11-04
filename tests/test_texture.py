@@ -3,7 +3,7 @@ import struct
 import numpy as np
 import pytest
 
-from ctlmod import texture
+from control_mod import texture
 
 
 def make_dds(fmt: str, w: int, h: int, mips: int) -> bytes:

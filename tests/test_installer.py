@@ -4,11 +4,11 @@ import json
 
 import pytest
 
-from ctlmod import installer
-from ctlmod.archive import Archive, write_archive
-from ctlmod.config import Config, State
-from ctlmod.gamedata import GameData, is_ctlmod_archive, patch_name, split_archive_name
-from ctlmod.project import Mod
+from control_mod import installer
+from control_mod.archive import Archive, write_archive
+from control_mod.config import Config, State
+from control_mod.gamedata import GameData, is_control_mod_archive, patch_name, split_archive_name
+from control_mod.project import Mod
 
 
 @pytest.fixture
@@ -60,7 +60,7 @@ def test_install_routes_files_to_matching_patches(env):
     for stem, path, data in [("ep100-001-generic", "data/objects/characters/a.binfbx", b"A1"),
                              ("ep100-001-pc", "data_pc/textures/a_d.tex", b"T1"),
                              ("ep101-001-generic", "data/objects/characters/dlc.binfbx", b"D1")]:
-        assert is_ctlmod_archive(packs / f"{stem}.bin")
+        assert is_control_mod_archive(packs / f"{stem}.bin")
         assert Archive.open(packs / stem).read(path) == data
     # the original archives are untouched and GameData still serves originals
     assert GameData(gd.game_dir).read("data/objects/characters/a.binfbx") == b"A0"
@@ -124,6 +124,90 @@ def test_export_loose(env, tmp_path):
     fake_built_mod(cfg, gd, "m", {"data_pc/textures/a_d.tex": b"T1"})
     n = installer.export_loose(cfg, gd, state_for(cfg), tmp_path / "loose", log=lambda s: None)
     assert n == 1 and (tmp_path / "loose" / "data_pc/textures/a_d.tex").read_bytes() == b"T1"
+
+
+def test_packmeta_written_for_metadata_builds(env):
+    import zlib
+
+    from control_mod import packmeta
+
+    cfg, gd = env
+    reg = [(packmeta.FILE_INFO, "r::FileInfoMetadata"), (packmeta.RESOURCE, "r::ResourceMetadata")]
+    path = "data/objects/characters/a.binfbx"
+    base = packmeta.PackMeta(reg, [packmeta.Entry(packmeta.game_path(path), {
+        packmeta.FILE_INFO: packmeta.file_info(2, 0), packmeta.RESOURCE: packmeta.resource_meta(packmeta.resource_id(path))})])
+    (gd.pack_dir / "ep100-000-generic.packmeta").write_bytes(base.to_bytes())
+    mod = fake_built_mod(cfg, gd, "grown", {path: b"A-much-bigger-file"})
+    man = json.loads(mod.manifest_path.read_text())
+    st = state_for(cfg)
+    installer.install(cfg, gd, st, log=lambda s: None)
+    assert not (gd.pack_dir / "ep100-001-generic.packmeta").exists()  # not requested
+    man["metadata"] = True
+    mod.manifest_path.write_text(json.dumps(man))
+    installer.install(cfg, gd, st, log=lambda s: None)
+    pm = packmeta.PackMeta.parse((gd.pack_dir / "ep100-001-generic.packmeta").read_bytes())
+    e = pm.find(path)
+    data = b"A-much-bigger-file"
+    assert packmeta.read_file_info(e.objects[packmeta.FILE_INFO]) == (len(data), zlib.crc32(data))
+    assert e.objects[packmeta.RESOURCE] == base.entries[0].objects[packmeta.RESOURCE]
+    installer.uninstall(cfg, gd, st, log=lambda s: None)
+    assert not (gd.pack_dir / "ep100-001-generic.packmeta").exists()
+
+
+def test_packmeta_new_texture_and_model_dependencies(tmp_path):
+    """New textures get the metadata of the texture they derive from; the model's
+    dependency list gains every texture its materials reference."""
+    from conftest import material, synthetic_fbx
+    from control_mod import packmeta
+
+    game = tmp_path / "Control"
+    packs = game / "data_packfiles"
+    packs.mkdir(parents=True)
+    model_path = "data/objects/characters/m.binfbx"
+    old_tex = "data_pc/textures/test/a_d.tex"
+    new_tex = "data_pc/textures/control-mod/demo/m/new_d.tex"
+    fbx = synthetic_fbx()
+    write_archive(packs / "ep100-000-generic", [(model_path, fbx.to_bytes())])
+    write_archive(packs / "ep100-000-pc", [(old_tex, b"T0")])
+    reg = [(packmeta.MESH, "rend::MeshMetadata"), (packmeta.TEXTURE, "rend::TextureMetadata"),
+           (packmeta.FILE_INFO, "r::FileInfoMetadata"), (packmeta.RESOURCE, "r::ResourceMetadata")]
+    tex_meta = packmeta.make_object(packmeta.TEXTURE, b"texture-description")
+    mesh_meta = packmeta.make_object(packmeta.MESH, struct_mesh_payload())
+    old_tex_id = packmeta.resource_id(old_tex)
+    (packs / "ep100-000-generic.packmeta").write_bytes(packmeta.PackMeta(reg, [packmeta.Entry(packmeta.game_path(model_path), {
+        packmeta.MESH: mesh_meta, packmeta.FILE_INFO: packmeta.file_info(1, 0),
+        packmeta.RESOURCE: packmeta.resource_meta(packmeta.resource_id(model_path), [old_tex_id])})]).to_bytes())
+    (packs / "ep100-000-pc.packmeta").write_bytes(packmeta.PackMeta(reg, [packmeta.Entry(packmeta.game_path(old_tex), {
+        packmeta.TEXTURE: tex_meta, packmeta.FILE_INFO: packmeta.file_info(2, 0),
+        packmeta.RESOURCE: packmeta.resource_meta(old_tex_id)})]).to_bytes())
+    gd = GameData(game)
+
+    # the edited model points one material at the new texture
+    fbx.materials[1] = material("mat_b", texture="runtimedata\\data_pc\\textures\\control-mod\\demo\\m\\new_d.tex")
+    (tmp_path / "m.binfbx").write_bytes(fbx.to_bytes())
+    (tmp_path / "new_d.tex").write_bytes(b"NEW")
+    model_meta = packmeta.PackMeta.parse(installer.build_packmeta(gd, "ep100-000-generic", [(model_path, tmp_path / "m.binfbx")]))
+    rid, deps = packmeta.read_resource_meta(model_meta.find(model_path).objects[packmeta.RESOURCE])
+    assert rid == packmeta.resource_id(model_path)
+    assert deps[0] == old_tex_id and packmeta.resource_id(new_tex) in deps
+    assert packmeta.mesh_buffers(model_meta.find(model_path).objects[packmeta.MESH])[:2] == (len(fbx.secondary), len(fbx.primary))
+
+    tex_pm = packmeta.PackMeta.parse(installer.build_packmeta(gd, "ep100-000-pc", [(new_tex, tmp_path / "new_d.tex")], {new_tex: old_tex}))
+    e = tex_pm.find(new_tex)
+    assert e.objects[packmeta.TEXTURE] == tex_meta  # cloned from the original texture
+    assert packmeta.read_file_info(e.objects[packmeta.FILE_INFO])[0] == 3
+    assert packmeta.read_resource_meta(e.objects[packmeta.RESOURCE]) == (packmeta.resource_id(new_tex), [])
+
+
+def struct_mesh_payload() -> bytes:
+    """A minimal MeshMetadata payload: buffer description + bounding box."""
+    import struct
+
+    from control_mod import packmeta
+
+    buffers = packmeta.make_object(packmeta.MESH_BUFFERS, struct.pack("<IQQIII", 3, 0, 0, 0, 2, 0))
+    bbox = packmeta.make_object(packmeta.BOUNDING_BOX, struct.pack("<I6f", 1, 0, 0, 0, 1, 1, 1))
+    return struct.pack("<I", 21) + buffers + bbox
 
 
 def test_config_roundtrip(tmp_path):

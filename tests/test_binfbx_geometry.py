@@ -2,9 +2,9 @@ import numpy as np
 import pytest
 
 from conftest import LAYOUT_SKIN4, LAYOUT_STATIC, submesh, synthetic_fbx
-from ctlmod import geometry, model
-from ctlmod.binfbx import BinFbx
-from ctlmod.geometry import compute_tangents, decode, encode, islands, quantize_weights
+from control_mod import geometry, model
+from control_mod.binfbx import BinFbx
+from control_mod.geometry import compute_tangents, decode, encode, islands, quantize_weights
 
 
 def test_serialize_roundtrip(fbx):

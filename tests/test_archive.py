@@ -5,11 +5,11 @@ import zlib
 import pytest
 
 from conftest import needs_game
-from ctlmod.archive import (
+from control_mod.archive import (
     DATA_ALIGN, FILE_SIZE, FOLDER_SIZE, FOLDER_UNK, HEADER_SIZE, TAG_OFFSET, Archive, filetime_now, name_hash,
     write_archive,
 )  # fmt: skip
-from ctlmod.gamedata import CTLMOD_MARKER, is_ctlmod_archive
+from control_mod.gamedata import CONTROL_MOD_MARKER, LEGACY_MARKERS, is_control_mod_archive
 
 FILES = {
     "data/objects/characters/a.binfbx": b"A" * 100,
@@ -103,9 +103,9 @@ def test_marker_and_template_flags(tmp_path):
     write_archive(tmp_path / "base", [("d/f.bin", b"orig")])
     base = Archive.open(tmp_path / "base")
     base.files["d/f.bin"].flags = 7
-    write_archive(tmp_path / "patch", [("d/f.bin", b"new")], template=base, marker=CTLMOD_MARKER)
-    assert is_ctlmod_archive(tmp_path / "patch.bin")
-    assert not is_ctlmod_archive(tmp_path / "base.bin")
+    write_archive(tmp_path / "patch", [("d/f.bin", b"new")], template=base, marker=CONTROL_MOD_MARKER)
+    assert is_control_mod_archive(tmp_path / "patch.bin")
+    assert not is_control_mod_archive(tmp_path / "base.bin")
     patch = Archive.open(tmp_path / "patch")
     assert patch.files["d/f.bin"].flags == 7
     # the marker must not touch the bytes the game interprets
@@ -116,9 +116,13 @@ def test_legacy_marker_still_recognised(tmp_path):
     write_archive(tmp_path / "old", [("a.txt", b"x")])
     b = tmp_path / "old.bin"
     d = bytearray(b.read_bytes())
-    d[25:33] = CTLMOD_MARKER  # where ctlmod 0.1 put it
+    d[25:33] = LEGACY_MARKERS[0]  # where the first version put it
     b.write_bytes(bytes(d))
-    assert is_ctlmod_archive(b)
+    assert is_control_mod_archive(b)
+    d[25:33] = bytes(8)
+    d[25 + 96 : 33 + 96] = LEGACY_MARKERS[0]  # current location, old name
+    b.write_bytes(bytes(d))
+    assert is_control_mod_archive(b)
 
 
 @needs_game

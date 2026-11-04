@@ -1,9 +1,9 @@
-# Control file formats (as implemented by ctlmod)
+# Control file formats (as implemented by control-mod)
 
 Reverse engineered from the Steam release of Control: Ultimate Edition (archives
 version 9, models version 46). All structures are little endian. Field names in
-*italics* are not understood; ctlmod preserves them verbatim. Every claim below is
-checked by the code: `ctlmod selftest` re-serialises all 6,707 models byte-identically,
+*italics* are not understood; control-mod preserves them verbatim. Every claim below is
+checked by the code: `control-mod selftest` re-serialises all 6,707 models byte-identically,
 and `tests/test_game_data.py` checks decoded geometry against itself.
 
 ## Packfiles: `.bin` + `.rmdp`
@@ -11,7 +11,7 @@ and `tests/test_game_data.py` checks decoded geometry against itself.
 `data_packfiles/<ep>-<NNN>-<platform>[-<lang>].{bin,rmdp,packmeta}`, e.g.
 `ep100-000-generic` (models, generic data), `ep100-000-pc` (textures), `ep101-…`
 (expansion content). The engine enumerates `*.rmdp`; a higher `NNN` is meant to
-override lower ones. Whether added archives also need a `.packmeta` is not known yet.
+override lower ones, file by file; a patch archive can ship its own `.packmeta`.
 
 `.bin` (table of contents):
 
@@ -24,7 +24,7 @@ override lower ones. Whether added archives also need a `.packmeta` is not known
 | 13 | u32 | deletion folder count (1 in every game archive) |
 | 17 | u32 | deletion file count (0) |
 | 21 | u32 | name table size |
-| 25 | u8[128] | tag area: 13 zero bytes, then `x%016x` + NUL at byte 38 = build time as a Windows FILETIME; the rest is uninitialised memory (ctlmod puts its `ctlmod` marker at byte 121) |
+| 25 | u8[128] | tag area: 13 zero bytes, then `x%016x` + NUL at byte 38 = build time as a Windows FILETIME; the rest is uninitialised memory (control-mod puts its 8-byte `ctrl-mod` marker at byte 121) |
 | 153 | Folder[n] | 48 bytes each, pre-order, siblings sorted by name |
 | … | File[n] | 60 bytes each, grouped by folder, sorted by name |
 | … | Folder[deletions] | a second tree of deleted paths; game archives have only an empty root |
@@ -44,63 +44,83 @@ padded so the file length is a multiple of 32 (no compression).
 The engine loads these records directly into memory and converts indices to pointers
 (path lookup in `rl_rmdwin10_f.dll`), so the counts and the deletion tree must be
 exact: an archive without the deletion root crashes the game at startup (this was
-ctlmod 0.1's bug). `tests/test_archive.py` rebuilds small game archives from their
+the first version's bug). `tests/test_archive.py` rebuilds small game archives from their
 contents and requires byte-identical output.
 
-## Metadata: `.packmeta` (partly decoded, not written by ctlmod)
+## Metadata: `.packmeta`
 
-Each archive's `.packmeta` holds per-file metadata the engine trusts over the files:
+Each archive's `.packmeta` holds per-file metadata the engine trusts over the files
+themselves. control-mod reads and writes it (`src/control_mod/packmeta.py`);
+`tests/test_packmeta.py` re-serialises every `.packmeta` in the game byte-identically.
 
 ```
-u32 count, u32 1, u32 count, u32 strings_size
-char[strings_size]       NUL-terminated backslash paths
-u32[count]               string offsets (path order)
-u32 n (= count)
-u64[n]                   64-bit path hashes, sorted ascending (binary-search index)
-u32[n]                   string offset of each hash's path
-u32 type_count (33), Type[]: u32 hash, u32 len, char[len] name, u32 0
-                         e.g. r::FileInfoMetadata 0x95e8c0ef, rend::TextureMetadata
-                         0x968a49b7, rend::MeshMetadata, ... (identical in every pack)
-objects                  grouped by type; each: u32 0xd34db33f, u32 version(2),
-                         u32 size, u32 type hash, payload
+u32 file_count, u32 1, u32 file_count, u32 names_size
+char[names_size]         NUL-terminated paths (backslashes), in file order
+u32[file_count]          offset of each path (file order)
+u32 file_count
+u64[file_count]          resource ids, ascending (binary-search index)
+u32[file_count]          offset of the path of each id
+u32 type_count (33)      registry: u32 hash, u32 len, char[len] name, u32 object count
+                         (r::FileInfoMetadata 0x95e8c0ef, rend::MeshMetadata 0xfe276448,
+                         rend::TextureMetadata 0x968a49b7, r::ResourceMetadata 0x368b4205, ...)
+sections                 per registered type, in registry order: that type's objects
+                         for every file that has one, in file order
+type lists               one object per file (type 0xe974fdff): u32 2, u32 name offset,
+                         u32 n, n x ref object (type 0x35ae54c1) holding
+                         u64 (index within the section << 32 | type index)
 ```
 
-* `r::FileInfoMetadata` payload: `u32 1, u64 file size, u32 data CRC-32`.
-* `rend::MeshMetadata` (type `0xfe276448`) contains a nested object with the model's
-  **secondary vertex buffer size, primary vertex buffer size, index count and index
-  size** (the first fields of the `.binfbx` header), a bounding-box object (6 floats)
-  and shader-template information. The renderer allocates GPU buffers and ray-tracing
-  data from these.
-* `rend::TextureMetadata` contains format, width, height, mip count and per-mip
-  streaming offsets (nested objects).
-* A pack whose files need no metadata (e.g. the language string tables) has
-  `count = 0` and only the type registry.
-* The 64-bit path hash is **not** the engine's `StringHash64` (FNV-1a over
-  `c | 0x20`), CityHash64, FarmHash64, xxHash or CRC-64 of the stored path; it is
-  presumably produced by `ResourceID::createResourceID` (`rl_rmdwin10_f.dll` 0x11d970).
-  How objects are linked to files is not decoded yet.
+Every object is `u32 0xd34db33f, u32 version (2), u32 size, u32 type`, payload, and a
+`u32 0xd34db33f` footer; `size` counts all of it.
 
-Behaviour confirmed in game (patch archives without a `.packmeta`):
+* **Resource id** = CityHash64 of the normalised path: drop everything up to and
+  including the `data*` folder, backslashes, lower case
+  (`data_pc/textures/a.tex` → `textures.tex`). The same id is used for lookups from
+  other metadata (e.g. a model's texture list).
+* `r::FileInfoMetadata`: `u32 1, u64 file size, u32 data CRC-32`. The loader allocates
+  from the size.
+* `rend::MeshMetadata` contains an object `0xbf008d7d` with the model's **secondary
+  vertex buffer size, primary vertex buffer size, index count and index size** (the
+  first fields of the `.binfbx` header) and a bounding-box object `0xd8763d8b`
+  (6 floats), plus shader-template data. The renderer allocates GPU buffers and
+  ray-tracing data from these.
+* `r::ResourceMetadata`: `u32 3`, the file's own id object (`0x1bfc72d5`), `u32 n`, then
+  n id objects: its **dependencies** — for a model, the textures its materials use.
+  Texture bindings are resolved through this list, so a texture path in a material only
+  takes effect when the texture is listed here.
+* `rend::TextureMetadata`: format, width, height, mip count and per-mip streaming
+  offsets (nested objects).
+* A pack whose files need no metadata (e.g. language string tables) has `file_count = 0`
+  and only the type registry.
 
-* Metadata is looked up per file across all archives, so a replaced file is described
-  by the **original** archive's metadata.
-* A replaced texture with the same format, resolution and size works (a different CRC
-  is fine).
-* A replaced model with the **same size** loads and its geometry is used; a **larger**
-  model makes the game abort while loading (`NullMemoryResource` in
-  `rl_rmdwin10_f.dll` at 0x1c08e0, the engine's deliberate out-of-pool crash).
-* Texture paths in a model's materials are **ignored**: texture bindings come from
-  metadata. Changing a material's texture, even with a new material id, has no effect.
-* With ray tracing enabled, a model whose buffer sizes or per-LOD mesh list differ from
-  the original crashes in `Mesh::finalize`-built tables (`renderer_rmdwin10_f.dll`
-  0xa866b). ctlmod therefore keeps the original mesh slots and pads the buffers to the
-  original sizes (and caps the surface-area table at the original triangle count).
+What control-mod writes for a patch archive (`installer.build_packmeta`): every file of
+the patch, with the original archive's entry copied and updated — FileInfo size/CRC,
+mesh buffer sizes and bounding box, and the dependency list extended with the textures
+the rebuilt materials reference. A new texture gets a copy of the TextureMetadata of the
+texture it was derived from (hence the same-resolution rule) and its own FileInfo and
+ResourceMetadata.
+
+Behaviour confirmed in game:
+
+* Metadata is looked up per file across all archives, the highest patch first; without
+  a patch `.packmeta`, a replaced file is described by the **original** archive's
+  metadata.
+* Without new metadata: a replaced texture with the same format, resolution and size
+  works (a different CRC is fine); a replaced model with the **same size** works; a
+  **larger** model aborts while loading (`NullMemoryResource` in `rl_rmdwin10_f.dll` at
+  0x1c08e0); texture paths in materials are ignored (bindings come from the dependency
+  list); with ray tracing on, buffer sizes or a per-LOD mesh list that differ from the
+  metadata crash in `Mesh::finalize`-built tables (`renderer_rmdwin10_f.dll` 0xa866b).
+  `--size-matched` builds stay within these limits.
+* With the generated `.packmeta`: larger models, extra meshes, new materials and new
+  textures (same resolution as the one they replace) all work. Meshes still have to be
+  grouped by LOD and keep the original slots.
 
 ## Textures: `.tex`
 
 Plain DDS files. Characters use BC1 (`DXT1`), BC3 (`DXT5`), BC4 (DX10 format 80),
 BC5 (`ATI2`, normal maps: X,Y in R,G) and BC7 (DX10 98). The game's tool writes
-`pitch = width × height` for BC1/BC4 (not the DDS-spec value); ctlmod keeps the
+`pitch = width × height` for BC1/BC4 (not the DDS-spec value); control-mod keeps the
 template's convention. Material parameters reference textures as
 `runtimedata\data_pc\textures\…\name.tex` = archive path `data_pc/textures/…/name.tex`.
 
@@ -190,10 +210,10 @@ Stream 0 usually holds position + skinning, stream 1 tangent + normal + UVs.
 8-influence vertices have two bone-index and two weight attributes.
 
 The *island id* numbers connected pieces of a LOD in order (wrapping at 80; hair
-cards get 0–79). Its exact definition comes from the artists' tools, so ctlmod keeps
+cards get 0–79). Its exact definition comes from the artists' tools, so control-mod keeps
 it per vertex (Blender attribute `ctl_island`) and regenerates it for new geometry.
 
-## ctlmod model package (`mods/<mod>/models/<model>/`)
+## control-mod model package (`mods/<mod>/models/<model>/`)
 
 * `template.binfbx` — original file
 * `model.json` — bones (Blender-space head/tail/matrix), materials (params, texture

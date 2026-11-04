@@ -1,6 +1,6 @@
 """Checks against the real game files (skipped when Control is not installed).
 
-Set ``CTLMOD_FULL_SCAN=1`` to round-trip every model in the game instead of characters only.
+Set ``CONTROL_MOD_FULL_SCAN=1`` to round-trip every model in the game instead of characters only.
 """
 
 import os
@@ -9,9 +9,9 @@ import numpy as np
 import pytest
 
 from conftest import needs_game
-from ctlmod import geometry, model, texture
-from ctlmod.binfbx import BinFbx
-from ctlmod.package import game_texture_to_archive_path
+from control_mod import geometry, model, texture
+from control_mod.binfbx import BinFbx
+from control_mod.package import game_texture_to_archive_path
 
 pytestmark = [needs_game, pytest.mark.game]
 
@@ -31,7 +31,7 @@ def test_archives_load(game):
 
 
 def test_character_models_roundtrip_bytes(game):
-    pattern = "*" if os.environ.get("CTLMOD_FULL_SCAN") else "*/characters/*"
+    pattern = "*" if os.environ.get("CONTROL_MOD_FULL_SCAN") else "*/characters/*"
     hits = game.models(pattern)
     assert hits
     bad = []
@@ -46,7 +46,7 @@ def test_character_models_roundtrip_bytes(game):
                 assert m.primary_offset + n * geometry.stream_stride(m.attrs, 0) <= len(f.primary)
                 assert m.secondary_offset + n * geometry.stream_stride(m.attrs, 1) <= len(f.secondary)
             assert len(f.mesh_material) == len(f.meshes)
-            # the layout rules ctlmod enforces on rebuilt models hold for the game's own
+            # the layout rules control-mod enforces on rebuilt models hold for the game's own
             assert model.layout_problems(f) == [], model.layout_problems(f)
             if f.to_bytes() != data:
                 bad.append(h.entry.path)
@@ -95,7 +95,7 @@ def test_regenerated_tangents_match_game(game):
 
 
 def test_bone_positions_are_plausible(game):
-    from ctlmod.package import _blender_bones
+    from control_mod.package import _blender_bones
 
     f = BinFbx.parse(game.read(JESSE))
     bones = {b["name"]: b for b in _blender_bones(f)}

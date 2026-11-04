@@ -1,0 +1,12 @@
+# control-mod mod definition
+id = "demo_new_assets"
+name = "Demo: new texture + new material (needs metadata)"
+author = "Rony Kashem"
+version = "1.0.0"
+description = ""
+
+[models]
+
+[models.jesse_civilian_publish_physx]
+source = "data/objects/characters/intermediate/jesse_civilian_publish_physx.binfbx"
+lods = "authored"

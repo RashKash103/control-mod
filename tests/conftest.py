@@ -5,18 +5,18 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from ctlmod.binfbx import (
+from control_mod.binfbx import (
     P_SAMPLER, P_TEXTURE, P_UINT, P_VEC4, BinFbx, Bone, Material, MaterialParam, NLString, VertexAttr,
 )  # fmt: skip
-from ctlmod.config import find_blender
-from ctlmod.gamedata import find_game_dir
-from ctlmod.geometry import Submesh, encode
+from control_mod.config import find_blender
+from control_mod.gamedata import find_game_dir
+from control_mod.geometry import Submesh, encode
 
 GAME_DIR = find_game_dir()
 BLENDER = find_blender()
 
-needs_game = pytest.mark.skipif(GAME_DIR is None, reason="Control game files not found (set CTLMOD_GAME_DIR)")
-needs_blender = pytest.mark.skipif(BLENDER is None, reason="Blender not found (set CTLMOD_BLENDER)")
+needs_game = pytest.mark.skipif(GAME_DIR is None, reason="Control game files not found (set CONTROL_MOD_GAME_DIR)")
+needs_blender = pytest.mark.skipif(BLENDER is None, reason="Blender not found (set CONTROL_MOD_BLENDER)")
 
 LAYOUT_SKIN8 = [
     VertexAttr(0, 2, 0), VertexAttr(1, 4, 3), VertexAttr(1, 8, 1), VertexAttr(1, 7, 2),
@@ -113,7 +113,7 @@ def synthetic_fbx(lods=2, area_table=True) -> BinFbx:
         sh.unk2 = 1.0
         fbx.shadow_meshes.append(sh)
     if area_table:
-        from ctlmod.model import build_area_table
+        from control_mod.model import build_area_table
 
         fbx.trailer = build_area_table(0, subs)
     return fbx
@@ -128,6 +128,6 @@ def fbx() -> BinFbx:
 def game():
     if GAME_DIR is None:
         pytest.skip("Control game files not found")
-    from ctlmod.gamedata import GameData
+    from control_mod.gamedata import GameData
 
     return GameData(GAME_DIR)

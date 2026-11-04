@@ -5,7 +5,7 @@ import pytest
 import numpy as np
 
 from conftest import submesh
-from ctlmod import package
+from control_mod import package
 
 
 def test_axis_conversion_is_inverse_and_handedness_flip():
@@ -81,8 +81,8 @@ def test_export_then_build_unchanged(tmp_path, fbx):
     geo = np.load(tmp_path / "pkg" / "geometry.npz")
     _fake_dump(tmp_path / "pkg", meta, geo)
     res = package.build_from_blender(tmp_path / "pkg", log=lambda s: None)
-    from ctlmod.binfbx import BinFbx
-    from ctlmod.geometry import decode
+    from control_mod.binfbx import BinFbx
+    from control_mod.geometry import decode
 
     out = BinFbx.parse(res.binfbx)
     a, b = decode(fbx), decode(out)
@@ -109,7 +109,7 @@ def test_build_new_material_and_mesh(tmp_path, fbx):
         package.build_from_blender(tmp_path / "pkg", log=lambda s: None)
     # ... experimental builds still produce them (for future metadata support)
     res = package.build_from_blender(tmp_path / "pkg", log=lambda s: None, strict=False)
-    from ctlmod.binfbx import BinFbx
+    from control_mod.binfbx import BinFbx
 
     out = BinFbx.parse(res.binfbx)
     assert out.materials[-1].name.text == "mat_a_copy"
@@ -190,8 +190,8 @@ def test_texture_swap_and_new_image_are_refused(tex_pkg, tmp_path):
 
 def test_conform_keeps_original_mesh_slots(fbx):
     from conftest import LAYOUT_SKIN8, submesh
-    from ctlmod import model
-    from ctlmod.geometry import decode
+    from control_mod import model
+    from control_mod.geometry import decode
 
     subs = decode(fbx)
     slots = [(m.lod, mat) for m, mat in zip(fbx.meshes, fbx.mesh_material)]
@@ -214,8 +214,8 @@ def test_conform_keeps_original_mesh_slots(fbx):
 
 def test_conform_refuses_unknown_material_but_keeps_generated_lods(fbx):
     from conftest import LAYOUT_SKIN4, material, submesh
-    from ctlmod import model
-    from ctlmod.geometry import decode
+    from control_mod import model
+    from control_mod.geometry import decode
 
     mats = list(fbx.materials) + [material("lod_baked")]
     subs = decode(fbx)
@@ -234,9 +234,9 @@ def test_conform_refuses_unknown_material_but_keeps_generated_lods(fbx):
 
 def test_fit_to_size_reuses_coarser_lods(fbx):
     from conftest import LAYOUT_SKIN4, submesh, synthetic_fbx
-    from ctlmod import model
-    from ctlmod.binfbx import BinFbx
-    from ctlmod.geometry import decode
+    from control_mod import model
+    from control_mod.binfbx import BinFbx
+    from control_mod.geometry import decode
 
     # template: LOD1 is much heavier than LOD2 (as in real models)
     base = synthetic_fbx(lods=3)
@@ -290,7 +290,7 @@ def test_materials_with_same_name_are_not_duplicated(tmp_path, fbx):
     for m, info in zip(scene["meshes"], meta["meshes"]):
         m["material"] = ["mat_a", "mat_a.001"][info["material"]]
     (tmp_path / "pkg" / "blender_export" / "scene.json").write_text(json.dumps(scene))
-    from ctlmod.binfbx import BinFbx
+    from control_mod.binfbx import BinFbx
 
     out = BinFbx.parse(package.build_from_blender(tmp_path / "pkg", log=lambda s: None).binfbx)
     assert len(out.materials) == 2
