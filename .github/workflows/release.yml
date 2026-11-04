@@ -31,7 +31,7 @@ jobs:
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v6
       - name: Bump version and tag
         if: github.event_name == 'workflow_dispatch'
@@ -65,7 +65,7 @@ jobs:
     needs: tag
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.tag.outputs.tag }}
       - uses: astral-sh/setup-uv@v6
