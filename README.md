@@ -626,3 +626,9 @@ Releasing: *Actions → Release → Run workflow* with a version (e.g. `0.2.0`) 
 sdist. Pushing a `v*` tag that matches the version in `pyproject.toml` does the same.
 
 File format details are in [docs/FORMATS.md](docs/FORMATS.md).
+
+## License
+
+control-mod is released under the [MIT License](LICENSE). It contains no game files; Control
+and its assets belong to Remedy Entertainment, and mods you build contain (modified) game
+assets.

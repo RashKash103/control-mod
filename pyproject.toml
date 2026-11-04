@@ -3,6 +3,8 @@ name = "control-mod"
 version = "0.1.0"
 description = "Control: Ultimate Edition outfit and model modding toolkit (Blender workflow + mod manager)"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 requires-python = ">=3.12"
 dependencies = [
     "cityhash>=0.4.10",
